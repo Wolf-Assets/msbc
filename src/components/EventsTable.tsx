@@ -1,9 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+
+// MapKit types
+declare global {
+  interface Window {
+    mapkit: {
+      init: (options: { authorizationCallback: (done: (token: string) => void) => void }) => void;
+      Map: new (container: HTMLElement, options?: { showsCompass?: string; showsScale?: string; colorScheme?: string }) => MapKitMap;
+      Coordinate: new (latitude: number, longitude: number) => MapKitCoordinate;
+      CoordinateRegion: new (center: MapKitCoordinate, span: MapKitCoordinateSpan) => MapKitCoordinateRegion;
+      CoordinateSpan: new (latitudeDelta: number, longitudeDelta: number) => MapKitCoordinateSpan;
+      MarkerAnnotation: new (coordinate: MapKitCoordinate, options?: { title?: string; subtitle?: string; color?: string; glyphColor?: string }) => MapKitAnnotation;
+      Geocoder: new () => MapKitGeocoder;
+    };
+  }
+}
+
+interface MapKitMap {
+  showItems: (items: MapKitAnnotation[], options?: { animate?: boolean; padding?: { top: number; right: number; bottom: number; left: number } }) => void;
+  addAnnotation: (annotation: MapKitAnnotation) => void;
+  removeAnnotations: (annotations: MapKitAnnotation[]) => void;
+  annotations: MapKitAnnotation[];
+  region: MapKitCoordinateRegion;
+  destroy: () => void;
+}
+
+interface MapKitCoordinate {
+  latitude: number;
+  longitude: number;
+}
+
+interface MapKitCoordinateRegion {
+  center: MapKitCoordinate;
+  span: MapKitCoordinateSpan;
+}
+
+interface MapKitCoordinateSpan {
+  latitudeDelta: number;
+  longitudeDelta: number;
+}
+
+interface MapKitAnnotation {
+  coordinate: MapKitCoordinate;
+  title?: string;
+  subtitle?: string;
+  data?: { eventId: number };
+  addEventListener: (event: string, callback: () => void) => void;
+}
+
+interface MapKitGeocoder {
+  lookup: (address: string, callback: (error: Error | null, data: { results: { coordinate: MapKitCoordinate }[] }) => void) => void;
+}
 
 interface Event {
   id: number;
   name: string;
   eventDate: string;
+  location: string | null;
   totalPrepared: number;
   totalSold: number;
   totalGiveaway: number;
@@ -19,12 +71,16 @@ interface EventsTableProps {
 
 type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit';
 
+const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
+
 export default function EventsTable({ initialEvents }: EventsTableProps) {
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [showMap, setShowMap] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -142,6 +198,9 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
   const profitMargin = totals.revenue > 0 ? (totals.profit / totals.revenue) * 100 : 0;
   const sellThroughRate = totals.prepared > 0 ? (totals.sold / totals.prepared) * 100 : 0;
 
+  // Get events with locations for the map
+  const eventsWithLocations = events.filter(e => e.location && e.location.trim() !== '');
+
   return (
     <div>
       {/* Floating Card Container */}
@@ -152,15 +211,29 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
             <h2 className="text-2xl font-bold text-gray-900">Events</h2>
             <p className="text-sm text-gray-400 mt-1">Track your sales events and performance.</p>
           </div>
-          <button
-            onClick={addEvent}
-            className="px-5 py-2.5 bg-pink-500 text-white rounded-full font-medium text-sm hover:bg-pink-600 transition-all hover:shadow-lg hover:shadow-pink-200 flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Event
-          </button>
+          <div className="flex items-center gap-3">
+            {eventsWithLocations.length > 0 && (
+              <button
+                onClick={() => setShowMap(true)}
+                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-full font-medium text-sm hover:bg-gray-50 transition-all hover:shadow-md flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Past Events
+              </button>
+            )}
+            <button
+              onClick={addEvent}
+              className="px-5 py-2.5 bg-pink-500 text-white rounded-full font-medium text-sm hover:bg-pink-600 transition-all hover:shadow-lg hover:shadow-pink-200 flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Event
+            </button>
+          </div>
         </div>
 
         {/* Stats Grid - Moved to top */}
@@ -344,12 +417,251 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
         </div>
       </div>
 
+      {/* Map Modal */}
+      {showMap && (
+        <EventsMapModal
+          events={eventsWithLocations}
+          onClose={() => {
+            setShowMap(false);
+            setSelectedEvent(null);
+          }}
+          selectedEvent={selectedEvent}
+          onSelectEvent={setSelectedEvent}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+        />
+      )}
+
       {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
           {toast.message}
         </div>
       )}
+    </div>
+  );
+}
+
+// Full-screen Map Modal Component
+function EventsMapModal({
+  events,
+  onClose,
+  selectedEvent,
+  onSelectEvent,
+  formatCurrency,
+  formatDate,
+}: {
+  events: Event[];
+  onClose: () => void;
+  selectedEvent: Event | null;
+  onSelectEvent: (event: Event | null) => void;
+  formatCurrency: (amount: number) => string;
+  formatDate: (date: string) => string;
+}) {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<MapKitMap | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [geocodedEvents, setGeocodedEvents] = useState<Map<number, MapKitCoordinate>>(new Map());
+
+  // Load MapKit JS
+  useEffect(() => {
+    if (window.mapkit) {
+      setMapLoaded(true);
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
+    script.crossOrigin = 'anonymous';
+    script.onload = () => {
+      window.mapkit.init({
+        authorizationCallback: (done: (token: string) => void) => {
+          done(MAPKIT_TOKEN);
+        },
+      });
+      setMapLoaded(true);
+    };
+    document.head.appendChild(script);
+  }, []);
+
+  // Initialize map and add markers
+  useEffect(() => {
+    if (!mapLoaded || !mapContainerRef.current || mapRef.current) return;
+
+    const map = new window.mapkit.Map(mapContainerRef.current, {
+      showsCompass: 'adaptive',
+      showsScale: 'adaptive',
+      colorScheme: 'light',
+    });
+    mapRef.current = map;
+
+    // Geocode all event locations and add markers
+    const geocoder = new window.mapkit.Geocoder();
+    const newGeocodedEvents = new Map<number, MapKitCoordinate>();
+    const annotations: MapKitAnnotation[] = [];
+
+    let completed = 0;
+    events.forEach((event) => {
+      if (!event.location) return;
+
+      geocoder.lookup(event.location, (error, data) => {
+        completed++;
+
+        if (!error && data.results.length > 0) {
+          const coordinate = data.results[0].coordinate;
+          newGeocodedEvents.set(event.id, coordinate);
+
+          const marker = new window.mapkit.MarkerAnnotation(coordinate, {
+            title: event.name,
+            subtitle: formatDate(event.eventDate),
+            color: '#ec4899',
+            glyphColor: '#ffffff',
+          });
+
+          // Store event data on marker
+          (marker as MapKitAnnotation & { data: { eventId: number } }).data = { eventId: event.id };
+
+          // Add click handler
+          marker.addEventListener('select', () => {
+            const clickedEvent = events.find(e => e.id === event.id);
+            if (clickedEvent) {
+              onSelectEvent(clickedEvent);
+            }
+          });
+
+          annotations.push(marker);
+          map.addAnnotation(marker);
+        }
+
+        // After all geocoding is done, fit map to show all markers
+        if (completed === events.length && annotations.length > 0) {
+          setGeocodedEvents(newGeocodedEvents);
+          map.showItems(annotations, {
+            animate: true,
+            padding: { top: 80, right: 80, bottom: 80, left: 80 },
+          });
+        }
+      });
+    });
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.destroy();
+        mapRef.current = null;
+      }
+    };
+  }, [mapLoaded, events, formatDate, onSelectEvent]);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (selectedEvent) {
+          onSelectEvent(null);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose, selectedEvent, onSelectEvent]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
+      {/* Full screen map container */}
+      <div className="absolute inset-0 bg-white">
+        {/* Header */}
+        <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-md border-b border-gray-200">
+          <div className="flex items-center justify-between px-6 py-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Past Events Map</h2>
+              <p className="text-sm text-gray-500">{events.length} locations</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            >
+              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Map */}
+        <div ref={mapContainerRef} className="w-full h-full" />
+
+        {/* Event Detail Card */}
+        {selectedEvent && (
+          <div className="absolute bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-slideUp">
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">{selectedEvent.name}</h3>
+                  <p className="text-sm text-gray-500">{formatDate(selectedEvent.eventDate)}</p>
+                </div>
+                <button
+                  onClick={() => onSelectEvent(null)}
+                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {selectedEvent.location && (
+                <p className="text-sm text-gray-600 mb-4 flex items-center gap-1">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {selectedEvent.location}
+                </p>
+              )}
+
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center p-3 bg-gray-50 rounded-xl">
+                  <p className="text-xs text-gray-400 uppercase">Sold</p>
+                  <p className="text-lg font-bold text-gray-900">{selectedEvent.totalSold}</p>
+                </div>
+                <div className="text-center p-3 bg-pink-50 rounded-xl">
+                  <p className="text-xs text-pink-400 uppercase">Revenue</p>
+                  <p className="text-lg font-bold text-pink-600">{formatCurrency(selectedEvent.totalRevenue)}</p>
+                </div>
+                <div className="text-center p-3 bg-green-50 rounded-xl">
+                  <p className="text-xs text-green-400 uppercase">Profit</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(selectedEvent.netProfit)}</p>
+                </div>
+              </div>
+
+              <a
+                href={`/events/${selectedEvent.id}`}
+                className="block w-full text-center py-2.5 bg-pink-500 text-white rounded-xl font-medium text-sm hover:bg-pink-600 transition-colors"
+              >
+                View Full Details
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
