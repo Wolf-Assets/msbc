@@ -13,6 +13,7 @@
   "dependencies": {
     "@astrojs/node": "^9.5.2",
     "@astrojs/react": "^4.4.2",
+    "@astrojs/vercel": "^9.0.4",
     "@fontsource/bricolage-grotesque": "^5.2.10",
     "@libsql/client": "^0.17.0",
     "@tailwindcss/vite": "^4.1.18",
