@@ -1,0 +1,15 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Dashboard from '../components/Dashboard';
+import { db } from '../db';
+import { events, flavors } from '../db/schema';
+import { desc } from 'drizzle-orm';
+
+// Fetch data on server
+const allEvents = await db.select().from(events).orderBy(desc(events.eventDate));
+const allFlavors = await db.select().from(flavors);
+---
+
+<Layout title="Dashboard | Mighty Sweets Baking Co.">
+  <Dashboard client:load events={allEvents} flavors={allFlavors} />
+</Layout>

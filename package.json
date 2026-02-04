@@ -1,0 +1,44 @@
+{
+  "name": "mightysweetcookies",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev --port 4000",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9.5.2",
+    "@astrojs/react": "^4.4.2",
+    "@fontsource/bricolage-grotesque": "^5.2.10",
+    "@libsql/client": "^0.17.0",
+    "@tailwindcss/vite": "^4.1.18",
+    "@tiptap/extension-underline": "^3.19.0",
+    "@tiptap/react": "^3.19.0",
+    "@tiptap/starter-kit": "^3.19.0",
+    "@types/react": "^19.2.11",
+    "@types/react-dom": "^19.2.3",
+    "astro": "^5.17.1",
+    "date-fns": "^4.1.0",
+    "drizzle-orm": "^0.45.1",
+    "geist": "^1.5.1",
+    "react": "^19.2.4",
+    "react-day-picker": "^9.13.0",
+    "react-dom": "^19.2.4",
+    "react-quill-new": "^3.8.3",
+    "recharts": "^3.7.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+}
+
+const { title = 'Mighty Sweets Baking Co.' } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const isActive = (path: string) => {
+  if (path === '/') return currentPath === '/';
+  return currentPath.startsWith(path);
+};
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="https://mightysweetbakingco.com/wp-content/uploads/2025/07/logo-1.png" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div class="min-h-screen">
+      <!-- Header -->
+      <header class="bg-white sticky top-0 z-50">
+        <div class="max-w-[1600px] mx-auto px-4 lg:px-8 py-4 flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <img
+              src="https://mightysweetbakingco.com/wp-content/uploads/2025/07/logo-1.png"
+              alt="Mighty Sweets Baking Co."
+              class="h-12 w-auto"
+            />
+            <div>
+              <h1 class="text-xl font-bold text-gray-900">Mighty Sweets Baking Co.</h1>
+              <p class="text-xs text-pink-500 font-medium">Inventory Manager</p>
+            </div>
+          </div>
+
+          <nav class="flex gap-1">
+            <a href="/" class:list={["nav-link", { active: isActive('/') }]}>Home</a>
+            <a href="/flavors" class:list={["nav-link", { active: isActive('/flavors') }]}>Flavors</a>
+            <a href="/events" class:list={["nav-link", { active: isActive('/events') }]}>Events</a>
+          </nav>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="max-w-[1600px] mx-auto px-4 lg:px-8 py-6">
+        <slot />
+      </main>
+    </div>
+
+    <style>
+      .nav-link {
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #6b7280;
+        transition: all 0.15s ease;
+      }
+
+      .nav-link:hover {
+        color: #ec4899;
+        background-color: #fdf2f8;
+      }
+
+      .nav-link.active {
+        color: #db2777;
+        background-color: #fce7f3;
+      }
+    </style>
+  </body>
+</html>
