@@ -22,6 +22,7 @@ interface MapKitMap {
   annotations: MapKitAnnotation[];
   region: MapKitCoordinateRegion;
   destroy: () => void;
+  addEventListener: (event: string, callback: () => void) => void;
 }
 
 interface MapKitCoordinate {
@@ -460,8 +461,15 @@ function EventsMapModal({
 }) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapKitMap | null>(null);
+  const userRegionRef = useRef<MapKitCoordinateRegion | null>(null);
+  const isRestoringRegionRef = useRef(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [geocodedEvents, setGeocodedEvents] = useState<Map<number, MapKitCoordinate>>(new Map());
+
+  // Use ref for callback to avoid useEffect dependency issues
+  const onSelectEventRef = useRef(onSelectEvent);
+  onSelectEventRef.current = onSelectEvent;
 
   // Load MapKit JS
   useEffect(() => {
@@ -495,16 +503,27 @@ function EventsMapModal({
     });
     mapRef.current = map;
 
+    // Track user's region changes (for preserving zoom when clicking pins)
+    map.addEventListener('region-change-end', () => {
+      // Don't update if we're in the middle of restoring from a pin click
+      if (!isRestoringRegionRef.current) {
+        userRegionRef.current = map.region;
+      }
+    });
+
     // Geocode all event locations and add markers
     const geocoder = new window.mapkit.Geocoder();
     const newGeocodedEvents = new Map<number, MapKitCoordinate>();
     const annotations: MapKitAnnotation[] = [];
 
+    // Only count events that have locations
+    const eventsToGeocode = events.filter(e => e.location && e.location.trim() !== '');
     let completed = 0;
-    events.forEach((event) => {
-      if (!event.location) return;
 
-      geocoder.lookup(event.location, (error, data) => {
+    if (eventsToGeocode.length === 0) return;
+
+    eventsToGeocode.forEach((event) => {
+      geocoder.lookup(event.location!, (error, data) => {
         completed++;
 
         if (!error && data.results.length > 0) {
@@ -521,11 +540,24 @@ function EventsMapModal({
           // Store event data on marker
           (marker as MapKitAnnotation & { data: { eventId: number } }).data = { eventId: event.id };
 
-          // Add click handler
+          // Add click handler - use ref to avoid stale closure
           marker.addEventListener('select', () => {
             const clickedEvent = events.find(e => e.id === event.id);
             if (clickedEvent) {
-              onSelectEvent(clickedEvent);
+              onSelectEventRef.current(clickedEvent);
+              // Restore the user's current region to prevent MapKit from zooming/centering
+              if (userRegionRef.current && mapRef.current) {
+                isRestoringRegionRef.current = true;
+                setTimeout(() => {
+                  if (mapRef.current && userRegionRef.current) {
+                    mapRef.current.region = userRegionRef.current;
+                    // Clear flag after region change completes
+                    setTimeout(() => {
+                      isRestoringRegionRef.current = false;
+                    }, 100);
+                  }
+                }, 10);
+              }
             }
           });
 
@@ -534,12 +566,33 @@ function EventsMapModal({
         }
 
         // After all geocoding is done, fit map to show all markers
-        if (completed === events.length && annotations.length > 0) {
+        if (completed === eventsToGeocode.length && annotations.length > 0) {
           setGeocodedEvents(newGeocodedEvents);
-          map.showItems(annotations, {
-            animate: true,
-            padding: { top: 80, right: 80, bottom: 80, left: 80 },
-          });
+
+          // Calculate bounding box of all coordinates
+          const coords = annotations.map(a => a.coordinate);
+          const lats = coords.map(c => c.latitude);
+          const lngs = coords.map(c => c.longitude);
+
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+
+          // Calculate center and span
+          const centerLat = (minLat + maxLat) / 2;
+          const centerLng = (minLng + maxLng) / 2;
+          const latSpan = Math.max((maxLat - minLat) * 1.5, 0.1); // Add padding, min 0.1
+          const lngSpan = Math.max((maxLng - minLng) * 1.5, 0.1);
+
+          // Set the region to fit all markers
+          const region = new window.mapkit.CoordinateRegion(
+            new window.mapkit.Coordinate(centerLat, centerLng),
+            new window.mapkit.CoordinateSpan(latSpan, lngSpan)
+          );
+          map.region = region;
+          userRegionRef.current = region;
+          setMapReady(true);
         }
       });
     });
@@ -550,7 +603,8 @@ function EventsMapModal({
         mapRef.current = null;
       }
     };
-  }, [mapLoaded, events, formatDate, onSelectEvent]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapLoaded]);
 
   // Handle escape key
   useEffect(() => {
@@ -589,8 +643,22 @@ function EventsMapModal({
           </div>
         </div>
 
-        {/* Map */}
-        <div ref={mapContainerRef} className="w-full h-full" />
+        {/* Loading indicator */}
+        {!mapReady && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-5">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm text-gray-500">Loading map...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Map - hidden until ready */}
+        <div
+          ref={mapContainerRef}
+          className="w-full h-full transition-opacity duration-300"
+          style={{ opacity: mapReady ? 1 : 0 }}
+        />
 
         {/* Event Detail Card */}
         {selectedEvent && (
