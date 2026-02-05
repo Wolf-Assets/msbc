@@ -861,7 +861,7 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                 onClick={() => updateEvent('location', '')}
                 className="text-xs text-red-400 hover:text-red-500 mt-2 transition-colors"
               >
-                remove address
+                Remove Address
               </button>
             )}
           </div>
