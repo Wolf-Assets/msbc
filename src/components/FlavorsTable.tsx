@@ -130,7 +130,7 @@ export default function FlavorsTable({ initialFlavors }: FlavorsTableProps) {
                 <th className="w-28">Unit Price</th>
                 <th className="w-28">Unit Cost</th>
                 <th className="w-24">Margin</th>
-                <th className="w-12"></th>
+                <th className="w-14"></th>
               </tr>
             </thead>
             <tbody>
@@ -181,16 +181,20 @@ export default function FlavorsTable({ initialFlavors }: FlavorsTableProps) {
                   <td>
                     <button
                       onClick={() => handleDeleteClick(flavor.id)}
-                      className={`p-2 transition-all ${
+                      className={`p-2 transition-all min-w-[44px] ${
                         pendingDelete === flavor.id
-                          ? 'opacity-100 text-red-500'
+                          ? 'opacity-100 text-red-500 text-xs font-medium'
                           : 'opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500'
                       }`}
                       title={pendingDelete === flavor.id ? 'Click again to confirm' : 'Delete'}
                     >
-                      <svg className={`w-4 h-4 ${pendingDelete === flavor.id ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
+                      {pendingDelete === flavor.id ? (
+                        <span className="animate-pulse">delete</span>
+                      ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      )}
                     </button>
                   </td>
                 </tr>

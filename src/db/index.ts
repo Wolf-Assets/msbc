@@ -208,5 +208,5 @@ export async function initializeDb(): Promise<void> {
   }
 }
 
-// Initialize on import - now async
-initializeDb().catch(console.error);
+// Note: initializeDb() should only be run once during initial setup, not on every request
+// Tables already exist in production - call manually if needed for new deployments

@@ -78,7 +78,6 @@ const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
 export default function EventsTable({ initialEvents }: EventsTableProps) {
   const [events, setEvents] = useState<Event[]>(initialEvents);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showMap, setShowMap] = useState(false);
@@ -88,14 +87,6 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
   };
-
-  // Reset pending delete after 3 seconds
-  useEffect(() => {
-    if (pendingDelete) {
-      const timer = setTimeout(() => setPendingDelete(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [pendingDelete]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString + 'T00:00:00');
@@ -139,32 +130,6 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
       window.location.href = `/events/${newEvent.id}`;
     } catch {
       showToast('Failed to add event', 'error');
-    }
-  };
-
-  const handleDeleteClick = async (id: number) => {
-    // First click: show confirmation state
-    if (pendingDelete !== id) {
-      setPendingDelete(id);
-      return;
-    }
-
-    // Second click: actually delete
-    try {
-      const response = await fetch('/api/events', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-
-      if (!response.ok) throw new Error('Failed to delete');
-
-      setEvents((prev) => prev.filter((e) => e.id !== id));
-      setPendingDelete(null);
-      showToast('Deleted');
-    } catch {
-      showToast('Failed to delete', 'error');
-      setPendingDelete(null);
     }
   };
 
@@ -282,42 +247,42 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                 <SortableHeader label="COGS" column="totalCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Fee" column="eventCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Profit" column="netProfit" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {sortedEvents.map((event) => (
-                <tr key={event.id} className="group">
+                <tr
+                  key={event.id}
+                  className="group cursor-pointer hover:bg-pink-50 transition-colors"
+                  onClick={() => window.location.href = `/events/${event.id}`}
+                >
                   <td>
-                    <a
-                      href={`/events/${event.id}`}
-                      className="editable-cell text-pink-600 hover:text-pink-700 font-medium cursor-pointer"
-                    >
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-pink-600 font-medium text-sm">
                       {event.name}
-                    </a>
+                    </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-600 text-sm whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-600 text-sm whitespace-nowrap">
                       {formatDate(event.eventDate)}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-600 text-sm text-center justify-center">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
                       {event.totalPrepared}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-600 text-sm text-center justify-center">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
                       {event.totalSold}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-600 text-sm text-center justify-center">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
                       {event.totalGiveaway}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.totalRevenue > 0 ? (
                         <span className="text-gray-900 font-medium">{formatCurrency(event.totalRevenue)}</span>
                       ) : (
@@ -326,7 +291,7 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.totalCost > 0 ? (
                         <span className="text-gray-600">{formatCurrency(event.totalCost)}</span>
                       ) : (
@@ -335,12 +300,12 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       <span className={event.eventCost > 0 ? "text-orange-600" : "text-gray-400"}>{formatCurrency(event.eventCost || 0)}</span>
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.netProfit > 0 ? (
                         <span className="text-green-600 font-medium">{formatCurrency(event.netProfit)}</span>
                       ) : event.netProfit < 0 ? (
@@ -350,66 +315,51 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                       )}
                     </span>
                   </td>
-                  <td>
-                    <button
-                      onClick={() => handleDeleteClick(event.id)}
-                      className={`p-2 transition-all ${
-                        pendingDelete === event.id
-                          ? 'opacity-100 text-red-500'
-                          : 'opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500'
-                      }`}
-                      title={pendingDelete === event.id ? 'Click again to confirm' : 'Delete'}
-                    >
-                      <svg className={`w-4 h-4 ${pendingDelete === event.id ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
                 </tr>
               ))}
               {/* Totals Row */}
               {events.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
                   <td>
-                    <span className="editable-cell font-bold text-gray-900">Total</span>
+                    <span className="px-4 py-3 min-h-[44px] flex items-center font-bold text-gray-900 text-sm">Total</span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-400 text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-400 text-sm">
                       {events.length} events
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
                       {totals.prepared.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
                       {totals.sold.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
                       {totals.giveaway.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 whitespace-nowrap">
                       {formatCurrency(totals.revenue)}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 whitespace-nowrap">
                       {formatCurrency(totals.cost)}
                     </span>
                   </td>
                   <td>
-                    <span className={`editable-cell text-sm text-right justify-end font-semibold whitespace-nowrap ${totals.fee > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                    <span className={`px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold whitespace-nowrap ${totals.fee > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
                       {formatCurrency(totals.fee)}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {totals.profit >= 0 ? (
                         <span className="text-green-600 font-bold">{formatCurrency(totals.profit)}</span>
                       ) : (
@@ -417,7 +367,6 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                       )}
                     </span>
                   </td>
-                  <td></td>
                 </tr>
               )}
             </tbody>

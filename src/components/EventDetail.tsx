@@ -172,6 +172,7 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
     prepared: 0,
     unitCost: '',
   });
+  const [pendingDeleteEvent, setPendingDeleteEvent] = useState(false);
   // Sorting state
   type SortColumn = 'id' | 'flavorName' | 'prepared' | 'remaining' | 'giveaway' | 'sold' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
@@ -189,6 +190,39 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
+  };
+
+  // Reset pending delete after 3 seconds
+  useEffect(() => {
+    if (pendingDeleteEvent) {
+      const timer = setTimeout(() => setPendingDeleteEvent(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingDeleteEvent]);
+
+  const handleDeleteEvent = async () => {
+    // First click: show confirmation state
+    if (!pendingDeleteEvent) {
+      setPendingDeleteEvent(true);
+      return;
+    }
+
+    // Second click: actually delete
+    try {
+      const response = await fetch('/api/events', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: event.id }),
+      });
+
+      if (!response.ok) throw new Error('Failed to delete');
+
+      // Redirect to events page
+      window.location.href = '/events';
+    } catch {
+      showToast('Failed to delete event', 'error');
+      setPendingDeleteEvent(false);
+    }
   };
 
   // Get flavor ID for an item
@@ -353,14 +387,19 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
 
     // Get the values we need for calculations
     const prepared = field === 'prepared' ? (value as number) : item.prepared;
-    const remaining = field === 'remaining' ? (value as number) : item.remaining;
+    const sold = field === 'sold' ? (value as number) : item.sold;
     const giveaway = field === 'giveaway' ? (value as number) : item.giveaway;
     const unitCost = field === 'unitCost' ? (value as number | null) : item.unitCost;
-    const revenue = field === 'revenue' ? (value as number) : item.revenue;
 
-    // Calculate sold = prepared - remaining - giveaway
-    const sold = Math.max(0, prepared - remaining - giveaway);
-    updates.sold = sold;
+    // Calculate remaining = prepared - sold - giveaway
+    const remaining = Math.max(0, prepared - sold - giveaway);
+    updates.remaining = remaining;
+
+    // Calculate revenue = sold * unitPrice (from flavor)
+    const flavor = availableFlavors.find(f => f.name === item.flavorName);
+    const unitPrice = flavor?.unitPrice || 5; // Default to $5 if not found
+    const revenue = sold * unitPrice;
+    updates.revenue = revenue;
 
     // Calculate COGS = sold * unitCost
     const cogs = unitCost ? sold * unitCost : 0;
@@ -577,9 +616,9 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                   <SortableHeader column="id" label="ID" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-12 text-center" />
                   <SortableHeader column="flavorName" label="Flavor" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} />
                   <SortableHeader column="prepared" label="Prepared" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="remaining" label="Left" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="giveaway" label="Giveaway" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
                   <SortableHeader column="sold" label="Sold" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
+                  <SortableHeader column="giveaway" label="Giveaway" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
+                  <SortableHeader column="remaining" label="Left" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
                   <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
                   <th className="w-12 text-center">Base</th>
                   <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
@@ -613,8 +652,8 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                     </td>
                     <td>
                       <EditableNumber
-                        value={item.remaining}
-                        onSave={(val) => updateItem(item.id, 'remaining', val)}
+                        value={item.sold}
+                        onSave={(val) => updateItem(item.id, 'sold', val)}
                         className="editable-cell text-gray-600 text-sm text-center justify-center"
                       />
                     </td>
@@ -627,16 +666,13 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                     </td>
                     <td>
                       <span className="editable-cell text-gray-600 text-sm text-center justify-center">
-                        {item.sold}
+                        {item.remaining}
                       </span>
                     </td>
                     <td>
-                      <EditableNumber
-                        value={item.revenue || 0}
-                        onSave={(val) => updateItem(item.id, 'revenue', val)}
-                        isCurrency
-                        className="editable-cell text-gray-600 text-sm text-right justify-end"
-                      />
+                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
+                        {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
+                      </span>
                     </td>
                     <td>
                       <div className="flex justify-center">
@@ -713,7 +749,7 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                   </td>
                   <td>
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
-                      {items.reduce((sum, i) => sum + i.remaining, 0)}
+                      {items.reduce((sum, i) => sum + i.sold, 0)}
                     </span>
                   </td>
                   <td>
@@ -723,7 +759,7 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                   </td>
                   <td>
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
-                      {items.reduce((sum, i) => sum + i.sold, 0)}
+                      {items.reduce((sum, i) => sum + i.remaining, 0)}
                     </span>
                   </td>
                   <td>
@@ -768,6 +804,20 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
               onSave={(content) => updateEvent('notes', content)}
             />
           </div>
+
+          {/* Delete Event */}
+          <div className="px-4 mt-8 mb-4">
+            <button
+              onClick={handleDeleteEvent}
+              className="text-red-500 text-sm hover:text-red-600 transition-colors"
+            >
+              {pendingDeleteEvent ? (
+                <span className="animate-pulse">Confirm? Tap Again</span>
+              ) : (
+                'Delete This Event'
+              )}
+            </button>
+          </div>
           </div>
         </div>
       </div>
@@ -804,7 +854,16 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
               value={event.location || 'Click to add address'}
               onSave={(value) => updateEvent('location', value === 'Click to add address' ? '' : value)}
               className="text-sm text-gray-600"
+              multiline
             />
+            {event.location && (
+              <button
+                onClick={() => updateEvent('location', '')}
+                className="text-xs text-red-400 hover:text-red-500 mt-2 transition-colors"
+              >
+                remove address
+              </button>
+            )}
           </div>
         </div>
 
@@ -997,17 +1056,23 @@ function StatCard({ label, value, sublabel, highlight }: { label: string; value:
 }
 
 // Editable Text Component
-function EditableText({ value, onSave, className, allowEmpty = false }: { value: string; onSave: (value: string) => void; className?: string; allowEmpty?: boolean }) {
+function EditableText({ value, onSave, className, allowEmpty = false, multiline = false }: { value: string; onSave: (value: string) => void; className?: string; allowEmpty?: boolean; multiline?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (isEditing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
+    if (isEditing) {
+      if (multiline && textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select();
+      } else if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+      }
     }
-  }, [isEditing]);
+  }, [isEditing, multiline]);
 
   useEffect(() => {
     setEditValue(value);
@@ -1025,7 +1090,7 @@ function EditableText({ value, onSave, className, allowEmpty = false }: { value:
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !multiline) {
       handleSave();
     } else if (e.key === 'Escape') {
       setEditValue(value);
@@ -1034,6 +1099,19 @@ function EditableText({ value, onSave, className, allowEmpty = false }: { value:
   };
 
   if (isEditing) {
+    if (multiline) {
+      return (
+        <textarea
+          ref={textareaRef}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={handleSave}
+          onKeyDown={handleKeyDown}
+          rows={3}
+          className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2 py-1 w-full resize-none`}
+        />
+      );
+    }
     return (
       <input
         ref={inputRef}
@@ -1048,9 +1126,9 @@ function EditableText({ value, onSave, className, allowEmpty = false }: { value:
   }
 
   return (
-    <span onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2`}>
+    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2 whitespace-pre-wrap`}>
       {value}
-    </span>
+    </div>
   );
 }
 
