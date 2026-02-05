@@ -71,6 +71,7 @@ export async function initializeDb(): Promise<void> {
       name TEXT NOT NULL,
       event_date TEXT NOT NULL,
       location TEXT,
+      event_cost REAL DEFAULT 0,
       total_prepared INTEGER DEFAULT 0,
       total_sold INTEGER DEFAULT 0,
       total_giveaway INTEGER DEFAULT 0,
@@ -85,6 +86,13 @@ export async function initializeDb(): Promise<void> {
     )
   `);
 
+  // Add event_cost column if it doesn't exist (migration for existing databases)
+  try {
+    await client.execute(`ALTER TABLE events ADD COLUMN event_cost REAL DEFAULT 0`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   await client.execute(`
     CREATE TABLE IF NOT EXISTS event_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -98,8 +106,13 @@ export async function initializeDb(): Promise<void> {
       unit_cost REAL,
       cogs REAL DEFAULT 0,
       profit REAL DEFAULT 0,
-      FOREIGN KEY (event_id) REFERENCES events(id)
+      FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
     )
+  `);
+
+  // Create index on event_id for faster lookups
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_event_items_event_id ON event_items(event_id)
   `);
 
   // Check if we have flavors data

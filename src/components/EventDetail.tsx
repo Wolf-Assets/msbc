@@ -119,6 +119,7 @@ interface Event {
   name: string;
   eventDate: string;
   location: string | null;
+  eventCost: number;
   totalPrepared: number;
   totalSold: number;
   totalGiveaway: number;
@@ -510,6 +511,15 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
                   </div>
                 </>
               )}
+            </div>
+            <div className="ml-auto shrink-0 flex items-center gap-1">
+              <span className="text-lg text-gray-400">Fee:</span>
+              <EditableNumber
+                value={event.eventCost}
+                onSave={(value) => updateEvent('eventCost', value)}
+                className="text-xl font-medium text-gray-600"
+                isCurrency
+              />
             </div>
           </div>
         </div>
@@ -1201,7 +1211,7 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
 
   const formatDisplay = (num: number) => {
     if (isCurrency) {
-      return num > 0 ? `$${num.toFixed(2)}` : '—';
+      return `$${num.toFixed(2)}`;
     }
     return num.toString();
   };

@@ -14,6 +14,7 @@ export const events = sqliteTable('events', {
   name: text('name').notNull(),
   eventDate: text('event_date').notNull(),
   location: text('location'),
+  eventCost: real('event_cost').default(0),
   totalPrepared: integer('total_prepared').default(0),
   totalSold: integer('total_sold').default(0),
   totalGiveaway: integer('total_giveaway').default(0),

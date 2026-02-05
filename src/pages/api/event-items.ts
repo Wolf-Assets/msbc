@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { db } from '../../db';
 import { eventItems, events } from '../../db/schema';
 import type { NewEventItem } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 // Request body types for API operations
 interface CreateEventItemRequest {
@@ -37,14 +37,14 @@ interface DeleteEventItemRequest {
   eventId?: number;
 }
 
-// Type for the totals accumulator in recalculateEventTotals
-interface EventTotals {
-  totalPrepared: number;
-  totalSold: number;
-  totalGiveaway: number;
-  totalRevenue: number;
-  totalCost: number;
-  netProfit: number;
+// Type for SQL aggregation result
+interface TotalsRow {
+  totalPrepared: number | null;
+  totalSold: number | null;
+  totalGiveaway: number | null;
+  totalRevenue: number | null;
+  totalCost: number | null;
+  netProfit: number | null;
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -131,25 +131,21 @@ export const DELETE: APIRoute = async ({ request }) => {
 };
 
 async function recalculateEventTotals(eventId: number): Promise<void> {
-  const items = await db.select().from(eventItems).where(eq(eventItems.eventId, eventId)).all();
+  // Use SQL SUM for efficiency instead of fetching all rows and reducing in JS
+  const result = await db
+    .select({
+      totalPrepared: sql<number>`COALESCE(SUM(${eventItems.prepared}), 0)`,
+      totalSold: sql<number>`COALESCE(SUM(${eventItems.sold}), 0)`,
+      totalGiveaway: sql<number>`COALESCE(SUM(${eventItems.giveaway}), 0)`,
+      totalRevenue: sql<number>`COALESCE(SUM(${eventItems.revenue}), 0)`,
+      totalCost: sql<number>`COALESCE(SUM(${eventItems.cogs}), 0)`,
+      netProfit: sql<number>`COALESCE(SUM(${eventItems.profit}), 0)`,
+    })
+    .from(eventItems)
+    .where(eq(eventItems.eventId, eventId))
+    .get();
 
-  const initialTotals: EventTotals = {
-    totalPrepared: 0,
-    totalSold: 0,
-    totalGiveaway: 0,
-    totalRevenue: 0,
-    totalCost: 0,
-    netProfit: 0,
-  };
-
-  const totals = items.reduce<EventTotals>((acc, item) => ({
-    totalPrepared: acc.totalPrepared + (item.prepared ?? 0),
-    totalSold: acc.totalSold + (item.sold ?? 0),
-    totalGiveaway: acc.totalGiveaway + (item.giveaway ?? 0),
-    totalRevenue: acc.totalRevenue + (item.revenue ?? 0),
-    totalCost: acc.totalCost + (item.cogs ?? 0),
-    netProfit: acc.netProfit + (item.profit ?? 0),
-  }), initialTotals);
-
-  await db.update(events).set(totals).where(eq(events.id, eventId)).run();
+  if (result) {
+    await db.update(events).set(result).where(eq(events.id, eventId)).run();
+  }
 }

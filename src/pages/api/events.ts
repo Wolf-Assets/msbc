@@ -9,6 +9,7 @@ interface CreateEventRequest {
   name: string;
   eventDate: string;
   location?: string | null;
+  eventCost?: number;
   totalPrepared?: number;
   totalSold?: number;
   totalGiveaway?: number;
@@ -26,6 +27,7 @@ interface UpdateEventRequest {
   name?: string;
   eventDate?: string;
   location?: string | null;
+  eventCost?: number;
   totalPrepared?: number;
   totalSold?: number;
   totalGiveaway?: number;
@@ -76,6 +78,7 @@ export const POST: APIRoute = async ({ request }) => {
       name: data.name,
       eventDate: data.eventDate,
       location: data.location ?? null,
+      eventCost: data.eventCost ?? 0,
       totalPrepared: data.totalPrepared ?? 0,
       totalSold: data.totalSold ?? 0,
       totalGiveaway: data.totalGiveaway ?? 0,

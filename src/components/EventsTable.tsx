@@ -57,6 +57,7 @@ interface Event {
   name: string;
   eventDate: string;
   location: string | null;
+  eventCost: number;
   totalPrepared: number;
   totalSold: number;
   totalGiveaway: number;
@@ -70,7 +71,7 @@ interface EventsTableProps {
   initialEvents: Event[];
 }
 
-type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit';
+type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit' | 'eventCost';
 
 const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
 
@@ -134,8 +135,8 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
       if (!response.ok) throw new Error('Failed to add');
 
       const newEvent = await response.json();
-      setEvents((prev) => [...prev, newEvent]);
-      showToast('Added new event');
+      // Redirect to the new event's detail page
+      window.location.href = `/events/${newEvent.id}`;
     } catch {
       showToast('Failed to add event', 'error');
     }
@@ -189,6 +190,7 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
     giveaway: events.reduce((sum, e) => sum + e.totalGiveaway, 0),
     revenue: events.reduce((sum, e) => sum + e.totalRevenue, 0),
     cost: events.reduce((sum, e) => sum + e.totalCost, 0),
+    fee: events.reduce((sum, e) => sum + (e.eventCost || 0), 0),
     profit: events.reduce((sum, e) => sum + e.netProfit, 0),
   };
 
@@ -278,6 +280,7 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                 <SortableHeader label="Giveaway" column="totalGiveaway" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
                 <SortableHeader label="Revenue" column="totalRevenue" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
                 <SortableHeader label="COGS" column="totalCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
+                <SortableHeader label="Fee" column="eventCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Profit" column="netProfit" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
                 <th className="w-10"></th>
               </tr>
@@ -329,6 +332,11 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                       ) : (
                         <span className="text-gray-300">—</span>
                       )}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="editable-cell text-sm text-right justify-end whitespace-nowrap">
+                      <span className={event.eventCost > 0 ? "text-orange-600" : "text-gray-400"}>{formatCurrency(event.eventCost || 0)}</span>
                     </span>
                   </td>
                   <td>
@@ -393,6 +401,11 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
                   <td>
                     <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 whitespace-nowrap">
                       {formatCurrency(totals.cost)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`editable-cell text-sm text-right justify-end font-semibold whitespace-nowrap ${totals.fee > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                      {formatCurrency(totals.fee)}
                     </span>
                   </td>
                   <td>
