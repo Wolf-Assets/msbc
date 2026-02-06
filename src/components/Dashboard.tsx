@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   XAxis,
   YAxis,
@@ -32,14 +33,32 @@ interface Flavor {
   isActive: boolean;
 }
 
-interface DashboardProps {
-  events: Event[];
-  flavors: Flavor[];
-}
-
 const CHART_PINK = '#ec4899';
 
-export default function Dashboard({ events, flavors }: DashboardProps) {
+export default function Dashboard() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch data on mount
+  useEffect(() => {
+    fetch('/api/events')
+      .then(res => res.json())
+      .then(data => {
+        setEvents(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
   // Filter events with actual sales (for some metrics)
   const eventsWithSales = events.filter(e => e.totalSold > 0);
 

@@ -67,16 +67,27 @@ interface Event {
   notes: string | null;
 }
 
-interface EventsTableProps {
-  initialEvents: Event[];
-}
-
 type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit' | 'eventCost';
 
 const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
 
-export default function EventsTable({ initialEvents }: EventsTableProps) {
-  const [events, setEvents] = useState<Event[]>(initialEvents);
+export default function EventsTable() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch events on mount
+  useEffect(() => {
+    fetch('/api/events')
+      .then(res => res.json())
+      .then(data => {
+        setEvents(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        showToast('Failed to load events', 'error');
+      });
+  }, []);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('eventDate');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -168,6 +179,16 @@ export default function EventsTable({ initialEvents }: EventsTableProps) {
 
   // Get events with locations for the map
   const eventsWithLocations = events.filter(e => e.location && e.location.trim() !== '');
+
+  if (loading) {
+    return (
+      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
+        <div className="flex items-center justify-center py-12">
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

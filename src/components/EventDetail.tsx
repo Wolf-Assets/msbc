@@ -154,15 +154,33 @@ interface Flavor {
 }
 
 interface EventDetailProps {
-  event: Event;
-  items: EventItem[];
-  availableFlavors: Flavor[];
+  eventId: number;
 }
 
-export default function EventDetail({ event: initialEvent, items: initialItems, availableFlavors }: EventDetailProps) {
-  const [event, setEvent] = useState<Event>(initialEvent);
-  const [items, setItems] = useState<EventItem[]>(initialItems);
+export default function EventDetail({ eventId }: EventDetailProps) {
+  const [event, setEvent] = useState<Event | null>(null);
+  const [items, setItems] = useState<EventItem[]>([]);
+  const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Fetch data on mount - events API returns items with event when fetching by ID
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/events?id=${eventId}`).then(res => res.json()),
+      fetch('/api/flavors').then(res => res.json()),
+    ])
+      .then(([eventData, flavorsData]) => {
+        const { items: eventItems, ...eventOnly } = eventData;
+        setEvent(eventOnly);
+        setItems(eventItems || []);
+        setAvailableFlavors(flavorsData);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, [eventId]);
   const [editingDate, setEditingDate] = useState(false);
   const [showAddFlavor, setShowAddFlavor] = useState(false);
   const [addFlavorMode, setAddFlavorMode] = useState<'select' | 'custom'>('select');
@@ -178,14 +196,19 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   // Track which items use base cost vs custom cost (per item)
-  const [useBaseCost, setUseBaseCost] = useState<Record<number, boolean>>(() => {
-    const initial: Record<number, boolean> = {};
-    initialItems.forEach(item => {
-      const matchingFlavor = availableFlavors.find(f => f.name === item.flavorName);
-      initial[item.id] = matchingFlavor?.unitCost === item.unitCost;
-    });
-    return initial;
-  });
+  const [useBaseCost, setUseBaseCost] = useState<Record<number, boolean>>({});
+
+  // Initialize useBaseCost when items and flavors are loaded
+  useEffect(() => {
+    if (items.length > 0 && availableFlavors.length > 0) {
+      const initial: Record<number, boolean> = {};
+      items.forEach(item => {
+        const matchingFlavor = availableFlavors.find(f => f.name === item.flavorName);
+        initial[item.id] = matchingFlavor?.unitCost === item.unitCost;
+      });
+      setUseBaseCost(initial);
+    }
+  }, [items, availableFlavors]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -351,7 +374,8 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
       showToast('Date updated');
     } catch {
       showToast('Failed to update date', 'error');
-      setEvent(initialEvent);
+      // Refetch event on error
+      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(setEvent);
     }
   };
 
@@ -374,7 +398,8 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
       showToast('Saved');
     } catch {
       showToast('Failed to save', 'error');
-      setEvent(initialEvent);
+      // Refetch event on error
+      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(setEvent);
     }
   };
 
@@ -428,7 +453,8 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
       }
     } catch {
       showToast('Failed to save', 'error');
-      setItems(initialItems);
+      // Refetch items on error
+      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json()).then(setItems);
     }
   };
 
@@ -475,9 +501,19 @@ export default function EventDetail({ event: initialEvent, items: initialItems, 
       }
     } catch {
       showToast('Failed to delete', 'error');
-      setItems(initialItems);
+      // Refetch items on error
+      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json()).then(setItems);
     }
   };
+
+  // Loading state
+  if (loading || !event) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   // Calculated metrics
   const sellThroughRate = event.totalPrepared > 0

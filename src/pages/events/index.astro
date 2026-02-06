@@ -1,14 +1,10 @@
 ---
-export const prerender = false;
-
 import Layout from '../../layouts/Layout.astro';
 import EventsTable from '../../components/EventsTable';
-import { db } from '../../db';
-import { events } from '../../db/schema';
 
-const allEvents = await db.select().from(events).all();
+export const prerender = true;
 ---
 
 <Layout title="Events | Mighty Sweets Baking Co.">
-  <EventsTable client:load initialEvents={allEvents} />
+  <EventsTable client:load />
 </Layout>

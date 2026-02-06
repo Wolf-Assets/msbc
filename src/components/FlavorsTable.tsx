@@ -8,15 +8,26 @@ interface Flavor {
   isActive: boolean;
 }
 
-interface FlavorsTableProps {
-  initialFlavors: Flavor[];
-}
-
-export default function FlavorsTable({ initialFlavors }: FlavorsTableProps) {
-  const [flavors, setFlavors] = useState<Flavor[]>(initialFlavors);
+export default function FlavorsTable() {
+  const [flavors, setFlavors] = useState<Flavor[]>([]);
+  const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [editingCell, setEditingCell] = useState<{ id: number; field: string } | null>(null);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
+
+  // Fetch flavors on mount
+  useEffect(() => {
+    fetch('/api/flavors')
+      .then(res => res.json())
+      .then(data => {
+        setFlavors(data);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        showToast('Failed to load flavors', 'error');
+      });
+  }, []);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -50,8 +61,8 @@ export default function FlavorsTable({ initialFlavors }: FlavorsTableProps) {
       showToast('Saved');
     } catch {
       showToast('Failed to save', 'error');
-      // Revert on error
-      setFlavors(initialFlavors);
+      // Refetch on error
+      fetch('/api/flavors').then(res => res.json()).then(setFlavors);
     }
   };
 
@@ -98,6 +109,16 @@ export default function FlavorsTable({ initialFlavors }: FlavorsTableProps) {
       setPendingDelete(null);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
+        <div className="flex items-center justify-center py-12">
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

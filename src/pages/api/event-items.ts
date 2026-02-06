@@ -47,6 +47,24 @@ interface TotalsRow {
   netProfit: number | null;
 }
 
+export const GET: APIRoute = async ({ url }) => {
+  const eventIdParam = url.searchParams.get('eventId');
+
+  if (!eventIdParam) {
+    return new Response(JSON.stringify({ error: 'eventId required' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const eventId = parseInt(eventIdParam, 10);
+  const items = await db.select().from(eventItems).where(eq(eventItems.eventId, eventId)).all();
+
+  return new Response(JSON.stringify(items), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+};
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const data: CreateEventItemRequest = await request.json();
