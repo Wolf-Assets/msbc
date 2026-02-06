@@ -154,18 +154,23 @@ interface Flavor {
 }
 
 interface EventDetailProps {
-  eventId: number;
+  eventId?: number;
 }
 
-export default function EventDetail({ eventId }: EventDetailProps) {
+export default function EventDetail({ eventId: propEventId }: EventDetailProps) {
   const [event, setEvent] = useState<Event | null>(null);
   const [items, setItems] = useState<EventItem[]>([]);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Get event ID from prop or URL path
+  const eventId = propEventId || (typeof window !== 'undefined' ? parseInt(window.location.pathname.split('/').pop() || '0') : 0);
+
   // Fetch data on mount - events API returns items with event when fetching by ID
   useEffect(() => {
+    if (!eventId) return;
+
     Promise.all([
       fetch(`/api/events?id=${eventId}`).then(res => res.json()),
       fetch('/api/flavors').then(res => res.json()),

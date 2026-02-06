@@ -1,12 +1,8 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import EventDetail from '../../components/EventDetail';
-
-export const prerender = false;
-
-const { id } = Astro.params;
 ---
 
 <Layout title="Event | Mighty Sweets Baking Co.">
-  <EventDetail client:load eventId={parseInt(id || '0')} />
+  <EventDetail client:load />
 </Layout>
