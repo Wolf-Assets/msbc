@@ -1,0 +1,15 @@
+---
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import FlavorsTable from '../components/FlavorsTable';
+import { db } from '../db';
+import { flavors } from '../db/schema';
+
+// Fetch flavors on server
+const allFlavors = await db.select().from(flavors);
+---
+
+<Layout title="Flavors | Mighty Sweets Baking Co.">
+  <FlavorsTable client:load initialFlavors={allFlavors} />
+</Layout>
