@@ -287,7 +287,8 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis
                 dataKey="name"
-                tick={({ x, y, payload }: { x: number; y: number; payload: { value: string } }) => {
+                tick={(props) => {
+                  const { x, y, payload } = props as { x: number; y: number; payload: { value: string } };
                   // Split by spaces first, then chunk if words are too long
                   const words = payload.value.split(' ');
                   const lines: string[] = [];
