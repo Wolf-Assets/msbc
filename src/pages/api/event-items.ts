@@ -61,7 +61,10 @@ export const GET: APIRoute = async ({ url }) => {
   const items = await db.select().from(eventItems).where(eq(eventItems.eventId, eventId)).all();
 
   return new Response(JSON.stringify(items), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+    },
   });
 };
 

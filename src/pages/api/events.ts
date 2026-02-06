@@ -59,14 +59,20 @@ export const GET: APIRoute = async ({ url }) => {
     }
     const items = await db.select().from(eventItems).where(eq(eventItems.eventId, id)).all();
     return new Response(JSON.stringify({ ...event, items }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+      },
     });
   }
 
   // Get all events
   const allEvents = await db.select().from(events).all();
   return new Response(JSON.stringify(allEvents), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+    },
   });
 };
 

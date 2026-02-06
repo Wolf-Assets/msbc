@@ -28,7 +28,10 @@ export const GET: APIRoute = async () => {
     const allFlavors = await db.select().from(flavors);
     return new Response(JSON.stringify(allFlavors), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=1, stale-while-revalidate=59',
+      },
     });
   } catch (error) {
     console.error('Failed to fetch flavors:', error);
