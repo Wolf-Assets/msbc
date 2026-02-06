@@ -1,0 +1,237 @@
+@import "tailwindcss";
+
+@source "../src/**/*.{ts,tsx}";
+@source "./**/*.{ts,tsx}";
+
+@theme {
+  --font-sans: 'Bricolage Grotesque', system-ui, sans-serif;
+  --color-cream: #fffbf7;
+}
+
+@layer base {
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    background-color: #ffffff;
+    color: #1a1a1a;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, label {
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Editable cell styles */
+  .editable-cell {
+    cursor: text;
+    padding: 12px 16px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+  }
+
+  .editable-cell:hover {
+    background-color: #f9fafb;
+  }
+
+  .editable-cell:focus {
+    outline: none;
+    background-color: #fff;
+    box-shadow: 0 0 0 2px #ec4899;
+  }
+
+  /* Table styles */
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 16px 16px;
+    font-family: 'Geist', system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9ca3af;
+    border-bottom: 1px solid #f3f4f6;
+    background-color: transparent;
+  }
+
+  .data-table td {
+    padding: 0;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+  }
+
+  .data-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .data-table tbody tr {
+    transition: background-color 0.2s ease;
+  }
+
+  .data-table tbody tr:hover {
+    background-color: #fafafa;
+  }
+
+  /* Button styles with Apple-inspired animations */
+  button, .btn {
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  button:hover, .btn:hover {
+    transform: scale(1.02);
+  }
+
+  button:active, .btn:active {
+    transform: scale(0.97);
+  }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    background: #1a1a1a;
+    color: white;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 1000;
+    animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .toast.success {
+    background: #10b981;
+  }
+
+  .toast.error {
+    background: #ef4444;
+  }
+
+  /* DayPicker customization */
+  .rdp {
+    --rdp-accent-color: #ec4899;
+    --rdp-accent-background-color: #fce7f3;
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+  }
+
+  .rdp-month_caption {
+    font-weight: 600;
+    font-size: 15px;
+    color: #1a1a1a;
+  }
+
+  .rdp-weekday {
+    color: #9ca3af;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .rdp-day {
+    border-radius: 8px;
+    transition: all 0.15s ease;
+  }
+
+  .rdp-day:hover:not(.rdp-day_selected) {
+    background-color: #fce7f3;
+    color: #ec4899;
+  }
+
+  .rdp-day_selected {
+    background-color: #ec4899 !important;
+    color: white !important;
+  }
+
+  /* React-Quill Editor Styles */
+  .notes-editor .quill {
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    background: white;
+  }
+
+  .notes-editor .ql-toolbar {
+    border: none !important;
+    border-bottom: 1px solid #f3f4f6 !important;
+    background: #f9fafb;
+    padding: 4px 8px !important;
+  }
+
+  .notes-editor .ql-toolbar button {
+    border-radius: 4px;
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .notes-editor .ql-toolbar button:hover {
+    background: #f3f4f6;
+  }
+
+  .notes-editor .ql-toolbar button.ql-active {
+    background: #fce7f3;
+    color: #ec4899;
+  }
+
+  .notes-editor .ql-container {
+    border: none !important;
+    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-size: 16px;
+  }
+
+  .notes-editor .ql-editor {
+    min-height: 120px;
+    padding: 12px 16px;
+    line-height: 1.6;
+    color: #374151;
+    font-size: 16px;
+  }
+
+  .notes-editor .ql-editor.ql-blank::before {
+    color: #9ca3af;
+    font-style: normal;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}

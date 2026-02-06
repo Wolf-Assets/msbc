@@ -4,8 +4,8 @@ import * as schema from './schema';
 
 // Create libSQL client - works for both Turso (remote) and local SQLite
 const client = createClient({
-  url: import.meta.env.TURSO_DATABASE_URL || 'file:cookies.db',
-  authToken: import.meta.env.TURSO_AUTH_TOKEN,
+  url: process.env.TURSO_DATABASE_URL || 'file:cookies.db',
+  authToken: process.env.TURSO_AUTH_TOKEN,
 });
 
 export const db = drizzle(client, { schema });
@@ -207,6 +207,3 @@ export async function initializeDb(): Promise<void> {
     }
   }
 }
-
-// Note: initializeDb() should only be run once during initial setup, not on every request
-// Tables already exist in production - call manually if needed for new deployments

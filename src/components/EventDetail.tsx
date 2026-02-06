@@ -112,7 +112,7 @@ interface QuillModules {
 type QuillComponentType = ComponentType<QuillEditorProps>;
 
 // Apple MapKit JS Token (from environment variable)
-const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
+const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
 
 interface Event {
   id: number;

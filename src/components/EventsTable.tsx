@@ -69,7 +69,7 @@ interface Event {
 
 type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit' | 'eventCost';
 
-const MAPKIT_TOKEN = import.meta.env.PUBLIC_MAPKIT_TOKEN;
+const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
 
 export default function EventsTable() {
   const [events, setEvents] = useState<Event[]>([]);
