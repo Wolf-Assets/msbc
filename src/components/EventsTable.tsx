@@ -1,56 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-
-// MapKit types
-declare global {
-  interface Window {
-    mapkit: {
-      init: (options: { authorizationCallback: (done: (token: string) => void) => void }) => void;
-      Map: new (container: HTMLElement, options?: { showsCompass?: string; showsScale?: string; colorScheme?: string }) => MapKitMap;
-      Coordinate: new (latitude: number, longitude: number) => MapKitCoordinate;
-      CoordinateRegion: new (center: MapKitCoordinate, span: MapKitCoordinateSpan) => MapKitCoordinateRegion;
-      CoordinateSpan: new (latitudeDelta: number, longitudeDelta: number) => MapKitCoordinateSpan;
-      MarkerAnnotation: new (coordinate: MapKitCoordinate, options?: { title?: string; subtitle?: string; color?: string; glyphColor?: string }) => MapKitAnnotation;
-      Geocoder: new () => MapKitGeocoder;
-    };
-  }
-}
-
-interface MapKitMap {
-  showItems: (items: MapKitAnnotation[], options?: { animate?: boolean; padding?: { top: number; right: number; bottom: number; left: number } }) => void;
-  addAnnotation: (annotation: MapKitAnnotation) => void;
-  removeAnnotations: (annotations: MapKitAnnotation[]) => void;
-  annotations: MapKitAnnotation[];
-  region: MapKitCoordinateRegion;
-  destroy: () => void;
-  addEventListener: (event: string, callback: () => void) => void;
-}
-
-interface MapKitCoordinate {
-  latitude: number;
-  longitude: number;
-}
-
-interface MapKitCoordinateRegion {
-  center: MapKitCoordinate;
-  span: MapKitCoordinateSpan;
-}
-
-interface MapKitCoordinateSpan {
-  latitudeDelta: number;
-  longitudeDelta: number;
-}
-
-interface MapKitAnnotation {
-  coordinate: MapKitCoordinate;
-  title?: string;
-  subtitle?: string;
-  data?: { eventId: number };
-  addEventListener: (event: string, callback: () => void) => void;
-}
-
-interface MapKitGeocoder {
-  lookup: (address: string, callback: (error: Error | null, data: { results: { coordinate: MapKitCoordinate }[] }) => void) => void;
-}
+import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate } from '../types/mapkit.d';
 
 interface Event {
   id: number;

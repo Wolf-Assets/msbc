@@ -329,7 +329,7 @@ export default function Dashboard() {
                 allowDataOverflow={true}
               />
               <Tooltip
-                formatter={(value: number) => [`${value.toFixed(1)}%`, 'Margin']}
+                formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Margin']}
                 labelFormatter={(label) => {
                   const event = marginByEvent.find(e => e.name === label);
                   return event ? `${event.fullName} (${event.date})` : label;
@@ -357,8 +357,8 @@ export default function Dashboard() {
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} type="number" scale="linear" />
               <Tooltip
-                formatter={(value: number, name: string) => [
-                  formatCurrency(value),
+                formatter={(value, name) => [
+                  formatCurrency(value as number),
                   name === 'avgRevenue' ? 'Avg Revenue' : 'Total Revenue'
                 ]}
                 labelFormatter={(label) => {
