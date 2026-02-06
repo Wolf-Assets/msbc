@@ -6,8 +6,13 @@ import vercel from '@astrojs/vercel';
 
 // https://astro.build/config
 export default defineConfig({
-  output: 'server',
-  adapter: vercel(),
+  output: 'hybrid',
+  adapter: vercel({
+    isr: {
+      // Cache pages for 60 seconds, revalidate in background
+      expiration: 60,
+    },
+  }),
   integrations: [react()],
   vite: {
     plugins: [tailwindcss()],
