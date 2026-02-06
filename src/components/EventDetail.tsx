@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import 'react-day-picker/style.css';
-import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate } from '../types/mapkit.d';
+import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate, MapKitGeocoderResponse } from '../types/mapkit.d';
 
 // Type for React-Quill component props
 interface QuillEditorProps {
@@ -148,6 +148,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     }
 
     // Second click: actually delete
+    if (!event) return;
     try {
       const response = await fetch('/api/events', {
         method: 'DELETE',
@@ -229,6 +230,8 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       return;
     }
 
+    if (!event) return;
+
     try {
       const response = await fetch('/api/event-items', {
         method: 'POST',
@@ -272,12 +275,12 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   };
 
   const updateEventDate = async (newDate: Date | null) => {
-    if (!newDate) return;
+    if (!newDate || !event) return;
 
     const dateStr = newDate.toISOString().split('T')[0];
 
     // Optimistic update
-    setEvent((prev) => ({ ...prev, eventDate: dateStr }));
+    setEvent((prev) => prev ? { ...prev, eventDate: dateStr } : null);
     setEditingDate(false);
 
     try {
@@ -301,8 +304,9 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   };
 
   const updateEvent = async (field: string, value: string | number) => {
+    if (!event) return;
     // Optimistic update
-    setEvent((prev) => ({ ...prev, [field]: value }));
+    setEvent((prev) => prev ? { ...prev, [field]: value } : null);
 
     try {
       const response = await fetch('/api/events', {
@@ -322,7 +326,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
 
   const updateItem = async (itemId: number, field: string, value: number | null) => {
     const item = items.find(i => i.id === itemId);
-    if (!item) return;
+    if (!item || !event) return;
 
     // Calculate derived values
     let updates: Partial<EventItem> = { [field]: value };
@@ -396,6 +400,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   };
 
   const deleteItem = async (itemId: number) => {
+    if (!event) return;
     // Optimistic update
     setItems(prev => prev.filter(i => i.id !== itemId));
 
@@ -1288,7 +1293,7 @@ function NotesEditor({ content, onSave }: { content: string; onSave: (content: s
       if (mounted) {
         // Import CSS
         import('react-quill-new/dist/quill.snow.css');
-        setQuillComponent(() => mod.default as QuillComponentType);
+        setQuillComponent(() => mod.default as unknown as QuillComponentType);
       }
     });
     return () => { mounted = false; };

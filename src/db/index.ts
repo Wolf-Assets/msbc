@@ -117,7 +117,7 @@ export async function initializeDb(): Promise<void> {
 
   // Check if we have flavors data
   const flavorCountResult = await client.execute('SELECT COUNT(*) as count FROM flavors');
-  const flavorCount = (flavorCountResult.rows[0] as CountResult).count;
+  const flavorCount = (flavorCountResult.rows[0] as unknown as CountResult).count;
 
   if (flavorCount === 0) {
     const sampleFlavors: SampleFlavor[] = [
@@ -142,7 +142,7 @@ export async function initializeDb(): Promise<void> {
 
   // Check if we have events data
   const eventCountResult = await client.execute('SELECT COUNT(*) as count FROM events');
-  const eventCount = (eventCountResult.rows[0] as CountResult).count;
+  const eventCount = (eventCountResult.rows[0] as unknown as CountResult).count;
 
   if (eventCount === 0) {
     // Events data from Excel
@@ -195,12 +195,13 @@ export async function initializeDb(): Promise<void> {
       // Add items if we have them (lookup by "name|date" key)
       const itemsKey = `${event.name}|${event.date}`;
       const items = eventItemsData[itemsKey];
-      if (items) {
+      const eventId = result.lastInsertRowid;
+      if (items && eventId !== undefined) {
         for (const item of items) {
           await client.execute({
             sql: `INSERT INTO event_items (event_id, flavor_name, prepared, remaining, giveaway, sold, revenue, unit_cost, cogs, profit)
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            args: [result.lastInsertRowid, item.flavor, item.prepared, item.remaining, item.giveaway, item.sold, item.revenue, item.unitCost, item.cogs, item.profit],
+            args: [eventId, item.flavor, item.prepared, item.remaining, item.giveaway, item.sold, item.revenue, item.unitCost, item.cogs, item.profit],
           });
         }
       }

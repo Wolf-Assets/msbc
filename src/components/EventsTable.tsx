@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate } from '../types/mapkit.d';
+import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate, MapKitCoordinateRegion } from '../types/mapkit.d';
 
 interface Event {
   id: number;
@@ -414,6 +414,7 @@ function EventsMapModal({
     script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
     script.crossOrigin = 'anonymous';
     script.onload = () => {
+      if (!window.mapkit) return;
       window.mapkit.init({
         authorizationCallback: (done: (token: string) => void) => {
           done(MAPKIT_TOKEN);
@@ -426,7 +427,7 @@ function EventsMapModal({
 
   // Initialize map and add markers
   useEffect(() => {
-    if (!mapLoaded || !mapContainerRef.current || mapRef.current) return;
+    if (!mapLoaded || !mapContainerRef.current || mapRef.current || !window.mapkit) return;
 
     const map = new window.mapkit.Map(mapContainerRef.current, {
       showsCompass: 'adaptive',
@@ -458,7 +459,7 @@ function EventsMapModal({
       geocoder.lookup(event.location!, (error, data) => {
         completed++;
 
-        if (!error && data.results.length > 0) {
+        if (!error && data?.results?.length && data.results.length > 0 && window.mapkit) {
           const coordinate = data.results[0].coordinate;
           newGeocodedEvents.set(event.id, coordinate);
 
@@ -498,7 +499,7 @@ function EventsMapModal({
         }
 
         // After all geocoding is done, fit map to show all markers
-        if (completed === eventsToGeocode.length && annotations.length > 0) {
+        if (completed === eventsToGeocode.length && annotations.length > 0 && window.mapkit) {
           setGeocodedEvents(newGeocodedEvents);
 
           // Calculate bounding box of all coordinates
