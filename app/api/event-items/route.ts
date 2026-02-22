@@ -76,10 +76,7 @@ async function recalculateEventTotals(eventId: number) {
   const totalRevenue = items.reduce((sum, i) => sum + (i.revenue || 0), 0);
   const totalCost = items.reduce((sum, i) => sum + (i.cogs || 0), 0);
 
-  // Get event cost for net profit calculation
-  const event = await db.select().from(events).where(eq(events.id, eventId)).get();
-  const eventCost = event?.eventCost || 0;
-  const netProfit = totalRevenue - totalCost - eventCost;
+  const netProfit = totalRevenue - totalCost;
 
   await db.update(events).set({
     totalPrepared,

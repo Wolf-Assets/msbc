@@ -10,6 +10,15 @@ const client = createClient({
 
 export const db = drizzle(client, { schema });
 
+// Run migrations on first import
+let _initialized = false;
+async function ensureInit() {
+  if (_initialized) return;
+  _initialized = true;
+  await initializeDb();
+}
+ensureInit();
+
 // Type for count query result
 interface CountResult {
   count: number;
@@ -93,6 +102,13 @@ export async function initializeDb(): Promise<void> {
     // Column already exists, ignore
   }
 
+  // Add deleted_at column for soft delete
+  try {
+    await client.execute(`ALTER TABLE events ADD COLUMN deleted_at TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   await client.execute(`
     CREATE TABLE IF NOT EXISTS event_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,6 +130,82 @@ export async function initializeDb(): Promise<void> {
   await client.execute(`
     CREATE INDEX IF NOT EXISTS idx_event_items_event_id ON event_items(event_id)
   `);
+
+  // Deliveries tables
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS deliveries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_name TEXT NOT NULL,
+      date_prepared TEXT NOT NULL,
+      dropoff_date TEXT,
+      expiration_date TEXT,
+      total_prepared INTEGER DEFAULT 0,
+      total_delivered INTEGER DEFAULT 0,
+      variance INTEGER DEFAULT 0,
+      total_cogs REAL DEFAULT 0,
+      total_revenue REAL DEFAULT 0,
+      gross_profit REAL DEFAULT 0,
+      profit_margin REAL DEFAULT 0,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS delivery_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      delivery_id INTEGER NOT NULL,
+      flavor_name TEXT NOT NULL,
+      prepared INTEGER DEFAULT 0,
+      delivered INTEGER DEFAULT 0,
+      variance INTEGER DEFAULT 0,
+      unit_price REAL,
+      unit_cost REAL,
+      revenue REAL DEFAULT 0,
+      cogs REAL DEFAULT 0,
+      profit REAL DEFAULT 0,
+      FOREIGN KEY (delivery_id) REFERENCES deliveries(id) ON DELETE CASCADE
+    )
+  `);
+
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_delivery_items_delivery_id ON delivery_items(delivery_id)
+  `);
+
+  // Add deleted_at column for soft delete
+  try {
+    await client.execute(`ALTER TABLE deliveries ADD COLUMN deleted_at TEXT`);
+  } catch {
+    // Column already exists, ignore
+  }
+
+  // Add invoice and payment columns to deliveries
+  const deliveryMigrations = [
+    `ALTER TABLE deliveries ADD COLUMN invoice_notes TEXT`,
+    `ALTER TABLE deliveries ADD COLUMN additional_fees REAL DEFAULT 0`,
+    `ALTER TABLE deliveries ADD COLUMN discount REAL DEFAULT 0`,
+    `ALTER TABLE deliveries ADD COLUMN prepaid_amount REAL DEFAULT 0`,
+    `ALTER TABLE deliveries ADD COLUMN cash_collected REAL DEFAULT 0`,
+    `ALTER TABLE deliveries ADD COLUMN venmo_collected REAL DEFAULT 0`,
+    `ALTER TABLE deliveries ADD COLUMN other_collected REAL DEFAULT 0`,
+  ];
+  for (const sql of deliveryMigrations) {
+    try {
+      await client.execute(sql);
+    } catch {
+      // Column already exists, ignore
+    }
+  }
+
+  // Fix existing rows — reset new columns that got bad defaults (column name strings)
+  try {
+    const check = await client.execute(`SELECT additional_fees FROM deliveries LIMIT 1`);
+    if (check.rows.length > 0 && typeof check.rows[0].additional_fees === 'string') {
+      await client.execute(`UPDATE deliveries SET invoice_notes = NULL, additional_fees = 0, discount = 0, prepaid_amount = 0, cash_collected = 0, venmo_collected = 0, other_collected = 0`);
+    }
+  } catch {
+    // ignore
+  }
 
   // Check if we have flavors data
   const flavorCountResult = await client.execute('SELECT COUNT(*) as count FROM flavors');

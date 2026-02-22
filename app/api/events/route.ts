@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { events, eventItems } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, isNull, isNotNull } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -17,8 +17,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ...event, items });
   }
 
-  // Get all events, sorted by date descending
-  const allEvents = await db.select().from(events).orderBy(desc(events.eventDate));
+  // Get archived or active events
+  const archived = searchParams.get('archived');
+  if (archived === 'true') {
+    const archivedEvents = await db.select().from(events).where(isNotNull(events.deletedAt)).orderBy(desc(events.eventDate));
+    return NextResponse.json(archivedEvents);
+  }
+
+  const allEvents = await db.select().from(events).where(isNull(events.deletedAt)).orderBy(desc(events.eventDate));
   return NextResponse.json(allEvents);
 }
 
@@ -58,10 +64,7 @@ export async function PUT(request: NextRequest) {
     updates.totalRevenue = items.reduce((sum, i) => sum + (i.revenue || 0), 0);
     updates.totalCost = items.reduce((sum, i) => sum + (i.cogs || 0), 0);
 
-    // Get event cost for net profit calculation
-    const event = await db.select().from(events).where(eq(events.id, id)).get();
-    const eventCost = event?.eventCost || 0;
-    updates.netProfit = updates.totalRevenue - updates.totalCost - eventCost;
+    updates.netProfit = updates.totalRevenue - updates.totalCost;
     delete updates.recalculate;
   }
 
@@ -72,12 +75,18 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const body = await request.json();
-  const { id } = body;
+  const { id, hard } = body;
 
-  // Delete event items first (cascade)
-  await db.delete(eventItems).where(eq(eventItems.eventId, id));
-  // Delete event
-  await db.delete(events).where(eq(events.id, id));
+  if (hard) {
+    // Hard delete — permanently remove from database
+    await db.delete(eventItems).where(eq(eventItems.eventId, id));
+    await db.delete(events).where(eq(events.id, id));
+  } else {
+    // Soft delete — set deletedAt timestamp
+    await db.update(events).set({
+      deletedAt: new Date().toISOString(),
+    }).where(eq(events.id, id));
+  }
 
   return NextResponse.json({ success: true });
 }

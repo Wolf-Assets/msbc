@@ -40,6 +40,7 @@ export default function RootLayout({
               <NavLink href="/">Home</NavLink>
               <NavLink href="/flavors">Flavors</NavLink>
               <NavLink href="/events">Events</NavLink>
+              <NavLink href="/deliveries">Deliveries</NavLink>
             </nav>
           </div>
         </header>

@@ -25,6 +25,7 @@ export const events = sqliteTable('events', {
   venmoCollected: real('venmo_collected').default(0),
   otherCollected: real('other_collected').default(0),
   notes: text('notes'),
+  deletedAt: text('deleted_at'),
   createdAt: text('created_at').default('CURRENT_TIMESTAMP'),
 });
 
@@ -42,9 +43,48 @@ export const eventItems = sqliteTable('event_items', {
   profit: real('profit').default(0),
 });
 
+export const deliveries = sqliteTable('deliveries', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  storeName: text('store_name').notNull(),
+  datePrepared: text('date_prepared').notNull(),
+  dropoffDate: text('dropoff_date'),
+  expirationDate: text('expiration_date'),
+  totalPrepared: integer('total_prepared').default(0),
+  totalCogs: real('total_cogs').default(0),
+  totalRevenue: real('total_revenue').default(0),
+  grossProfit: real('gross_profit').default(0),
+  profitMargin: real('profit_margin').default(0),
+  notes: text('notes'),
+  invoiceNotes: text('invoice_notes'),
+  additionalFees: real('additional_fees').default(0),
+  discount: real('discount').default(0),
+  prepaidAmount: real('prepaid_amount').default(0),
+  cashCollected: real('cash_collected').default(0),
+  venmoCollected: real('venmo_collected').default(0),
+  otherCollected: real('other_collected').default(0),
+  deletedAt: text('deleted_at'),
+  createdAt: text('created_at').default('CURRENT_TIMESTAMP'),
+});
+
+export const deliveryItems = sqliteTable('delivery_items', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  deliveryId: integer('delivery_id').notNull(),
+  flavorName: text('flavor_name').notNull(),
+  prepared: integer('prepared').default(0),
+  unitPrice: real('unit_price'),
+  unitCost: real('unit_cost'),
+  revenue: real('revenue').default(0),
+  cogs: real('cogs').default(0),
+  profit: real('profit').default(0),
+});
+
 export type Flavor = typeof flavors.$inferSelect;
 export type NewFlavor = typeof flavors.$inferInsert;
 export type Event = typeof events.$inferSelect;
 export type NewEvent = typeof events.$inferInsert;
 export type EventItem = typeof eventItems.$inferSelect;
 export type NewEventItem = typeof eventItems.$inferInsert;
+export type Delivery = typeof deliveries.$inferSelect;
+export type NewDelivery = typeof deliveries.$inferInsert;
+export type DeliveryItem = typeof deliveryItems.$inferSelect;
+export type NewDeliveryItem = typeof deliveryItems.$inferInsert;

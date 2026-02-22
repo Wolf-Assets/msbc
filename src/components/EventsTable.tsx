@@ -14,9 +14,10 @@ interface Event {
   totalCost: number;
   netProfit: number;
   notes: string | null;
+  deletedAt?: string | null;
 }
 
-type SortColumn = 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit' | 'eventCost';
+type SortColumn = 'id' | 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 'totalGiveaway' | 'totalRevenue' | 'totalCost' | 'netProfit' | 'eventCost';
 
 const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
 
@@ -24,9 +25,11 @@ export default function EventsTable() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch events on mount
-  useEffect(() => {
-    fetch('/api/events')
+  // Fetch events (active or archived)
+  const fetchEvents = (archived = false) => {
+    setLoading(true);
+    const url = archived ? '/api/events?archived=true' : '/api/events';
+    fetch(url)
       .then(res => res.json())
       .then(data => {
         setEvents(data);
@@ -36,16 +39,42 @@ export default function EventsTable() {
         setLoading(false);
         showToast('Failed to load events', 'error');
       });
+  };
+
+  useEffect(() => {
+    fetchEvents();
   }, []);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [sortColumn, setSortColumn] = useState<SortColumn>('eventDate');
+  const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [showMap, setShowMap] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
+  };
+
+  const toggleArchived = () => {
+    const next = !showArchived;
+    setShowArchived(next);
+    fetchEvents(next);
+  };
+
+  const restoreEvent = async (id: number) => {
+    try {
+      const response = await fetch('/api/events', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, deletedAt: null }),
+      });
+      if (!response.ok) throw new Error('Failed to restore');
+      setEvents(prev => prev.filter(e => e.id !== id));
+      showToast('Event restored');
+    } catch {
+      showToast('Failed to restore event', 'error');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -97,7 +126,9 @@ export default function EventsTable() {
   const sortedEvents = [...events].sort((a, b) => {
     let comparison = 0;
 
-    if (sortColumn === 'name') {
+    if (sortColumn === 'id') {
+      comparison = a.id - b.id;
+    } else if (sortColumn === 'name') {
       comparison = a.name.localeCompare(b.name);
     } else if (sortColumn === 'eventDate') {
       comparison = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
@@ -163,6 +194,19 @@ export default function EventsTable() {
               </button>
             )}
             <button
+              onClick={toggleArchived}
+              className={`px-5 py-2.5 border rounded-full font-medium text-sm transition-all hover:shadow-md flex items-center gap-2 ${
+                showArchived
+                  ? 'bg-gray-900 border-gray-900 text-white hover:bg-gray-800'
+                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+              </svg>
+              Archived
+            </button>
+            <button
               onClick={addEvent}
               className="px-5 py-2.5 bg-pink-500 text-white rounded-full font-medium text-sm hover:bg-pink-600 transition-all hover:shadow-lg hover:shadow-pink-200 flex items-center gap-2"
             >
@@ -208,6 +252,7 @@ export default function EventsTable() {
           <table className="data-table">
             <thead>
               <tr>
+                <SortableHeader label="#" column="id" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-12 text-center" />
                 <SortableHeader label="Event Name" column="name" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-52" />
                 <SortableHeader label="Date" column="eventDate" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-28" />
                 <SortableHeader label="Prepared" column="totalPrepared" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
@@ -217,6 +262,7 @@ export default function EventsTable() {
                 <SortableHeader label="COGS" column="totalCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Fee" column="eventCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Profit" column="netProfit" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
+                {showArchived && <th className="w-20"><span className="px-2 py-3 text-xs font-semibold text-gray-400 uppercase"></span></th>}
               </tr>
             </thead>
             <tbody>
@@ -226,6 +272,11 @@ export default function EventsTable() {
                   className="group cursor-pointer hover:bg-pink-50 transition-colors"
                   onClick={() => window.location.href = `/events/${event.id}`}
                 >
+                  <td>
+                    <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-400 text-sm">
+                      {event.id}
+                    </span>
+                  </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center text-pink-600 font-medium text-sm">
                       {event.name}
@@ -285,11 +336,24 @@ export default function EventsTable() {
                       )}
                     </span>
                   </td>
+                  {showArchived && (
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center justify-center">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); restoreEvent(event.id); }}
+                          className="text-xs font-medium text-pink-500 hover:text-pink-600"
+                        >
+                          Restore
+                        </button>
+                      </span>
+                    </td>
+                  )}
                 </tr>
               ))}
               {/* Totals Row */}
               {events.length > 0 && (
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
+                  <td></td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center font-bold text-gray-900 text-sm">Total</span>
                   </td>
