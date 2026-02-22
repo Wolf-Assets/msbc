@@ -25,26 +25,35 @@ interface Event {
   netProfit: number;
 }
 
-interface Flavor {
+interface Delivery {
   id: number;
-  name: string;
-  unitPrice: number;
-  unitCost: number | null;
-  isActive: boolean;
+  storeName: string;
+  datePrepared: string;
+  dropoffDate: string | null;
+  totalPrepared: number;
+  totalRevenue: number;
+  totalCogs: number;
+  grossProfit: number;
+  deletedAt: string | null;
 }
 
 const CHART_PINK = '#ec4899';
 
 export default function Dashboard() {
   const [events, setEvents] = useState<Event[]>([]);
+  const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch data on mount
+  // Fetch events and deliveries on mount
   useEffect(() => {
-    fetch('/api/events')
-      .then(res => res.json())
-      .then(data => {
-        setEvents(data);
+    Promise.all([
+      fetch('/api/events').then(res => res.json()),
+      fetch('/api/deliveries').then(res => res.json()),
+    ])
+      .then(([eventsData, deliveriesData]) => {
+        setEvents(eventsData);
+        // Filter out archived deliveries
+        setDeliveries((deliveriesData as Delivery[]).filter(d => !d.deletedAt));
         setLoading(false);
       })
       .catch(() => {
@@ -61,33 +70,52 @@ export default function Dashboard() {
   }
   // Filter events with actual sales (for some metrics)
   const eventsWithSales = events.filter(e => e.totalSold > 0);
+  const deliveriesWithRevenue = deliveries.filter(d => d.totalRevenue > 0);
 
-  // Calculate aggregate stats
-  const totalRevenue = events.reduce((sum, e) => sum + e.totalRevenue, 0);
-  const totalProfit = events.reduce((sum, e) => sum + e.netProfit, 0);
+  // Calculate aggregate stats (events + deliveries combined)
+  const eventRevenue = events.reduce((sum, e) => sum + e.totalRevenue, 0);
+  const deliveryRevenue = deliveries.reduce((sum, d) => sum + d.totalRevenue, 0);
+  const totalRevenue = eventRevenue + deliveryRevenue;
+
+  const eventProfit = events.reduce((sum, e) => sum + e.netProfit, 0);
+  const deliveryProfit = deliveries.reduce((sum, d) => sum + d.grossProfit, 0);
+  const totalProfit = eventProfit + deliveryProfit;
+
   const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
+  const totalSources = eventsWithSales.length + deliveriesWithRevenue.length;
 
-  // Monthly revenue trend - ensure all months are shown in order (Aug '25 to Feb '26)
-  const monthOrder = ["Aug '25", "Sep '25", "Oct '25", "Nov '25", "Dec '25", "Jan '26", "Feb '26"];
+  // Monthly revenue trend — combine events + deliveries (deliveries use dropoffDate)
+  const allMonthKeys = new Set<string>();
 
-  const monthlyData = eventsWithSales.reduce<Record<string, { revenue: number; profit: number; events: number }>>((acc, e) => {
-    const date = new Date(e.eventDate);
+  const addToMonthly = (acc: Record<string, { revenue: number; profit: number; count: number }>, dateStr: string, revenue: number, profit: number) => {
+    const date = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
     const month = date.toLocaleDateString('en-US', { month: 'short' }) + " '" + date.getFullYear().toString().slice(-2);
-    if (!acc[month]) {
-      acc[month] = { revenue: 0, profit: 0, events: 0 };
-    }
-    acc[month].revenue += e.totalRevenue;
-    acc[month].profit += e.netProfit;
-    acc[month].events += 1;
+    allMonthKeys.add(month);
+    if (!acc[month]) acc[month] = { revenue: 0, profit: 0, count: 0 };
+    acc[month].revenue += revenue;
+    acc[month].profit += profit;
+    acc[month].count += 1;
     return acc;
-  }, {});
+  };
 
-  // Create ordered monthly trend with all months (show 0 for months with no data)
+  const monthlyData: Record<string, { revenue: number; profit: number; count: number }> = {};
+  eventsWithSales.forEach(e => addToMonthly(monthlyData, e.eventDate, e.totalRevenue, e.netProfit));
+  deliveriesWithRevenue.forEach(d => addToMonthly(monthlyData, d.dropoffDate || d.datePrepared, d.totalRevenue, d.grossProfit));
+
+  // Build month order from actual data, sorted chronologically
+  const monthOrder = [...allMonthKeys].sort((a, b) => {
+    const parse = (m: string) => {
+      const [mon, yr] = m.split(" '");
+      return new Date(`${mon} 1, 20${yr}`).getTime();
+    };
+    return parse(a) - parse(b);
+  });
+
   const monthlyTrend = monthOrder.map(month => ({
     month,
     revenue: monthlyData[month]?.revenue || 0,
     profit: monthlyData[month]?.profit || 0,
-    events: monthlyData[month]?.events || 0,
+    count: monthlyData[month]?.count || 0,
   }));
 
   // Top events by revenue
@@ -132,25 +160,25 @@ export default function Dashboard() {
     .filter(v => v.visits > 1) // Only show repeated venues
     .sort((a, b) => b.visits - a.visits);
 
-  // Revenue by day of week
-  const dayOfWeekData = eventsWithSales.reduce<Record<string, { revenue: number; profit: number; count: number }>>((acc, e) => {
-    const date = new Date(e.eventDate + 'T00:00:00');
+  // Revenue by day of week (events + deliveries, deliveries use dropoff date)
+  const dayOfWeekData: Record<string, { revenue: number; profit: number; count: number }> = {};
+  const addToDay = (dateStr: string, revenue: number, profit: number) => {
+    const date = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
     const dayName = date.toLocaleDateString('en-US', { weekday: 'long' });
-    if (!acc[dayName]) {
-      acc[dayName] = { revenue: 0, profit: 0, count: 0 };
-    }
-    acc[dayName].revenue += e.totalRevenue;
-    acc[dayName].profit += e.netProfit;
-    acc[dayName].count += 1;
-    return acc;
-  }, {});
+    if (!dayOfWeekData[dayName]) dayOfWeekData[dayName] = { revenue: 0, profit: 0, count: 0 };
+    dayOfWeekData[dayName].revenue += revenue;
+    dayOfWeekData[dayName].profit += profit;
+    dayOfWeekData[dayName].count += 1;
+  };
+  eventsWithSales.forEach(e => addToDay(e.eventDate, e.totalRevenue, e.netProfit));
+  deliveriesWithRevenue.forEach(d => addToDay(d.dropoffDate || d.datePrepared, d.totalRevenue, d.grossProfit));
 
   const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   const revenueByDay = dayOrder.map(day => ({
     day,
     revenue: dayOfWeekData[day]?.revenue || 0,
     avgRevenue: dayOfWeekData[day] ? dayOfWeekData[day].revenue / dayOfWeekData[day].count : 0,
-    events: dayOfWeekData[day]?.count || 0,
+    count: dayOfWeekData[day]?.count || 0,
   }));
 
   const formatCurrency = (value: number) => {
@@ -191,11 +219,11 @@ export default function Dashboard() {
           <div>
             <p className="text-pink-100 text-xs font-medium uppercase tracking-wide">Total Revenue</p>
             <p className="text-2xl font-bold mt-1">{formatCurrency(totalRevenue)}</p>
-            <p className="text-pink-200 text-xs mt-1">From {eventsWithSales.length} events</p>
+            <p className="text-pink-200 text-xs mt-1">From {eventsWithSales.length} events and {deliveriesWithRevenue.length} deliveries</p>
           </div>
           <div className="text-right">
-            <p className="text-lg font-bold">{formatCurrency(totalRevenue / (eventsWithSales.length || 1))}</p>
-            <p className="text-pink-200 text-xs">avg per event</p>
+            <p className="text-lg font-bold">{formatCurrency(totalRevenue / (totalSources || 1))}</p>
+            <p className="text-pink-200 text-xs">avg per source</p>
           </div>
         </div>
 
@@ -203,7 +231,7 @@ export default function Dashboard() {
         <div className="col-span-1 row-span-1 bg-green-50 border border-green-100 rounded-3xl p-4 flex flex-col justify-center">
           <p className="text-xs text-green-600 font-medium uppercase tracking-wide">Total Profit</p>
           <p className="text-2xl font-bold text-green-600 mt-1">{formatCurrency(totalProfit)}</p>
-          <p className="text-xs text-green-500 mt-1">{formatCurrency(totalProfit / (eventsWithSales.length || 1))} avg</p>
+          <p className="text-xs text-green-500 mt-1">{formatCurrency(totalProfit / (totalSources || 1))} avg</p>
         </div>
 
         {/* Profit Margin */}
@@ -363,7 +391,7 @@ export default function Dashboard() {
                 ]}
                 labelFormatter={(label) => {
                   const day = revenueByDay.find(d => d.day === label);
-                  return day ? `${label} (${day.events} event${day.events > 1 ? 's' : ''})` : label;
+                  return day ? `${label} (${day.count} source${day.count > 1 ? 's' : ''})` : label;
                 }}
               />
               <Bar dataKey="avgRevenue" fill={CHART_PINK} radius={[4, 4, 0, 0]} name="avgRevenue" />

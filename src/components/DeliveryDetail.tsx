@@ -547,7 +547,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       doc.setTextColor(30, 30, 30);
 
       const cols = ['Description', 'Qty', 'Unit price', 'Amount'];
-      const colX = [14, 120, 150, 180];
+      const colX = [14, 150, 173, 196];
 
       // Right-align numeric columns
       doc.text(cols[0], colX[0], tableStartY);
