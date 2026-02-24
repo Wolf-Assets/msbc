@@ -108,6 +108,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     unitCost: '',
   });
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: number; confirm: boolean } | null>(null);
   // Sorting state
   type SortColumn = 'id' | 'flavorName' | 'prepared' | 'remaining' | 'giveaway' | 'sold' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
@@ -405,6 +406,44 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     }
   };
 
+  // Close context menu on click outside or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
+
+  const contextMenuDelete = async (itemId: number) => {
+    if (!event) return;
+    setContextMenu(null);
+    setItems(prev => prev.filter(i => i.id !== itemId));
+    try {
+      const response = await fetch('/api/event-items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, eventId: event.id }),
+      });
+      if (!response.ok) throw new Error('Failed to delete');
+      showToast('Item deleted');
+      const eventResponse = await fetch(`/api/events?id=${event.id}`);
+      if (eventResponse.ok) {
+        const updatedEvent = await eventResponse.json();
+        setEvent(updatedEvent);
+      }
+    } catch {
+      showToast('Failed to delete', 'error');
+      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(data => {
+        const { items: eventItems, ...eventOnly } = data;
+        setItems(eventItems || []);
+      });
+    }
+  };
+
   const deleteItem = async (itemId: number) => {
     if (!event) return;
     // Optimistic update
@@ -577,65 +616,58 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <table className="data-table">
               <thead>
                 <tr>
-                  <SortableHeader column="id" label="ID" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-12 text-center" />
                   <SortableHeader column="flavorName" label="Flavor" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} />
-                  <SortableHeader column="prepared" label="Prepared" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="sold" label="Sold" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="giveaway" label="Giveaway" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="remaining" label="Left" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <th className="w-12 text-center">Base</th>
-                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
-                  <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <th className="w-10"></th>
+                  <th style={{ width: '100%' }}></th>
+                  <SortableHeader column="prepared" label="Prepared" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
+                  <SortableHeader column="sold" label="Sold" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
+                  <SortableHeader column="giveaway" label="Giveaway" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
+                  <SortableHeader column="remaining" label="Left" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
+                  <th className="text-center">Base</th>
+                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                 </tr>
               </thead>
               <tbody>
                 {sortedItems.map((item) => (
-                  <tr key={item.id} className="group">
+                  <tr key={item.id} className="group" onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id, confirm: false });
+                  }}>
                     <td>
-                      <span className="editable-cell text-gray-400 text-sm text-center justify-center">
-                        {(() => {
-                          const flavorId = getFlavorId(item.flavorName);
-                          return flavorId !== 9999 ? flavorId : '—';
-                        })()}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="editable-cell font-medium text-gray-900">
+                      <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
                         {item.flavorName}
                       </span>
                     </td>
-                    <td>
+                    <td></td>
+                    <td className="text-center">
                       <EditableNumber
                         value={item.prepared}
                         onSave={(val) => updateItem(item.id, 'prepared', val)}
                         className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        showPencil
                       />
                     </td>
-                    <td>
+                    <td className="text-center">
                       <EditableNumber
                         value={item.sold}
                         onSave={(val) => updateItem(item.id, 'sold', val)}
                         className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        showPencil
                       />
                     </td>
-                    <td>
+                    <td className="text-center">
                       <EditableNumber
                         value={item.giveaway || 0}
                         onSave={(val) => updateItem(item.id, 'giveaway', val)}
                         className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        showPencil
                       />
                     </td>
-                    <td>
+                    <td className="text-center">
                       <span className="editable-cell text-gray-600 text-sm text-center justify-center">
                         {item.remaining}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
-                        {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
                       </span>
                     </td>
                     <td>
@@ -657,7 +689,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                         </button>
                       </div>
                     </td>
-                    <td>
+                    <td className="text-right">
                       {useBaseCost[item.id] ? (
                         <span className="editable-cell text-sm text-right justify-end text-gray-600">
                           {item.unitCost ? formatCurrency(item.unitCost) : '—'}
@@ -668,15 +700,21 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                           onSave={(val) => updateItem(item.id, 'unitCost', val)}
                           isCurrency
                           className="editable-cell text-gray-600 text-sm text-right justify-end"
+                          showPencil
                         />
                       )}
                     </td>
-                    <td>
+                    <td className="text-right">
                       <span className="editable-cell text-sm text-right justify-end text-gray-600">
                         {item.cogs > 0 ? formatCurrency(item.cogs) : '—'}
                       </span>
                     </td>
-                    <td>
+                    <td className="text-right">
+                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
+                        {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
+                      </span>
+                    </td>
+                    <td className="text-right">
                       <span className="editable-cell text-sm text-right justify-end">
                         {item.profit > 0 ? (
                           <span className="text-green-600 font-medium">{formatCurrency(item.profit)}</span>
@@ -687,62 +725,51 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                         )}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
-                        title="Delete item"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </td>
                   </tr>
                 ))}
                 {/* Totals Row */}
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
-                  <td></td>
                   <td>
                     <span className="editable-cell font-bold text-gray-900">Total</span>
                   </td>
-                  <td>
+                  <td></td>
+                  <td className="text-center">
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.prepared, 0)}
                     </span>
                   </td>
-                  <td>
+                  <td className="text-center">
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.sold, 0)}
                     </span>
                   </td>
-                  <td>
+                  <td className="text-center">
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + (i.giveaway || 0), 0)}
                     </span>
                   </td>
-                  <td>
+                  <td className="text-center">
                     <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.remaining, 0)}
                     </span>
                   </td>
-                  <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
-                      {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
-                    </span>
-                  </td>
                   <td></td>
-                  <td>
+                  <td className="text-right">
                     <span className="editable-cell text-sm text-right justify-end text-gray-400">
                       —
                     </span>
                   </td>
-                  <td>
+                  <td className="text-right">
                     <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
                       {formatCurrency(items.reduce((sum, i) => sum + i.cogs, 0))}
                     </span>
                   </td>
-                  <td>
+                  <td className="text-right">
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                      {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
+                    </span>
+                  </td>
+                  <td className="text-right">
                     <span className="editable-cell text-sm text-right justify-end">
                       {(() => {
                         const totalProfit = items.reduce((sum, i) => sum + i.profit, 0);
@@ -754,7 +781,6 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       })()}
                     </span>
                   </td>
-                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -895,6 +921,35 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
         </div>
       </div>
     </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px]"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+              contextMenu.confirm
+                ? 'text-red-600 bg-red-50 font-medium'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              if (contextMenu.confirm) {
+                contextMenuDelete(contextMenu.itemId);
+              } else {
+                setContextMenu({ ...contextMenu, confirm: true });
+              }
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {contextMenu.confirm ? 'Confirm Delete' : 'Delete'}
+          </button>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -1218,7 +1273,7 @@ function AppleMap({ location, eventName }: { location: string; eventName: string
 }
 
 // Editable Number Component for table cells
-function EditableNumber({ value, onSave, isCurrency = false, className, inline = false }: { value: number; onSave: (value: number) => void; isCurrency?: boolean; className?: string; inline?: boolean }) {
+function EditableNumber({ value, onSave, isCurrency = false, className, inline = false, showPencil = false }: { value: number; onSave: (value: number) => void; isCurrency?: boolean; className?: string; inline?: boolean; showPencil?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value.toString());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1279,8 +1334,13 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"}
+      className={`${className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
     >
+      {(showPencil || inline) && (
+        <svg className="text-gray-300 group-hover/num:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      )}
       {formatDisplay(value)}
     </span>
   );
@@ -1386,9 +1446,11 @@ function SortableHeader({
     >
       <div className={`flex items-center gap-1 ${className.includes('text-right') ? 'justify-end' : className.includes('text-center') ? 'justify-center' : ''}`}>
         <span>{label}</span>
-        <span className={`text-[10px] ${isActive ? 'text-pink-500' : 'text-gray-300'}`}>
-          {isActive ? (direction === 'asc' ? '▲' : '▼') : '▲'}
-        </span>
+        {isActive && (
+          <span className="text-[10px] text-pink-500">
+            {direction === 'asc' ? '▲' : '▼'}
+          </span>
+        )}
       </div>
     </th>
   );

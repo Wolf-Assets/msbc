@@ -235,3 +235,30 @@
   60% { transform: translateX(-4px); }
   80% { transform: translateX(4px); }
 }
+
+@keyframes soft-glow {
+  0%, 100% { box-shadow: 0 0 6px rgba(236, 72, 153, 0.2); }
+  50% { box-shadow: 0 0 16px rgba(236, 72, 153, 0.45); }
+}
+
+@keyframes border-spin {
+  0% { --border-angle: 0deg; }
+  100% { --border-angle: 360deg; }
+}
+
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.animated-border {
+  position: relative;
+  border: 2px solid transparent;
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  background-image:
+    linear-gradient(#ec4899, #ec4899),
+    conic-gradient(from var(--border-angle), #ec4899, #f9a8d4, #ffffff, #f9a8d4, #ec4899);
+  animation: border-spin 8s linear infinite, soft-glow 6s ease-in-out infinite;
+}

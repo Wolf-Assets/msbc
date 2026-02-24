@@ -420,8 +420,36 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
     }
   };
 
+  const [pendingDeleteItem, setPendingDeleteItem] = useState<number | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: number; confirm: boolean } | null>(null);
+
+  // Reset pending item delete after 3 seconds
+  useEffect(() => {
+    if (pendingDeleteItem !== null) {
+      const timer = setTimeout(() => setPendingDeleteItem(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingDeleteItem]);
+
+  // Close context menu on click outside or scroll
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
+
   const deleteItem = async (itemId: number) => {
     if (!delivery) return;
+    if (pendingDeleteItem !== itemId) {
+      setPendingDeleteItem(itemId);
+      return;
+    }
+    setPendingDeleteItem(null);
     // Optimistic update
     setItems(prev => prev.filter(i => i.id !== itemId));
 
@@ -437,6 +465,29 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       showToast('Item deleted');
 
       // Refresh delivery totals
+      const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
+      if (deliveryResponse.ok) {
+        const updatedDelivery = await deliveryResponse.json();
+        setDelivery(updatedDelivery);
+      }
+    } catch {
+      showToast('Failed to delete', 'error');
+      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then(res => res.json()).then(setItems);
+    }
+  };
+
+  const contextMenuDelete = async (itemId: number) => {
+    if (!delivery) return;
+    setContextMenu(null);
+    setItems(prev => prev.filter(i => i.id !== itemId));
+    try {
+      const response = await fetch('/api/delivery-items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, deliveryId: delivery.id }),
+      });
+      if (!response.ok) throw new Error('Failed to delete');
+      showToast('Item deleted');
       const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
       if (deliveryResponse.ok) {
         const updatedDelivery = await deliveryResponse.json();
@@ -943,35 +994,35 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <SortableHeader column="flavorName" label="Flavor" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} />
-                  <SortableHeader column="prepared" label="Qty" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-center" />
-                  <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <th className="w-12 text-center">Base</th>
-                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
-                  <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                  <th className="w-10"></th>
+                  <th>Flavor</th>
+                  <th style={{ width: '100%' }}></th>
+                  <SortableHeader column="prepared" label="Qty" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <th className="text-center">Base</th>
+                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                 </tr>
               </thead>
               <tbody>
                 {sortedItems.map((item) => (
-                  <tr key={item.id} className="group">
+                  <tr key={item.id} className="group" onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id, confirm: false });
+                  }}>
                     <td>
-                      <span className="editable-cell font-medium text-gray-900">
+                      <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
                         {item.flavorName}
                       </span>
                     </td>
+                    <td></td>
                     <td>
                       <EditableNumber
                         value={item.prepared}
                         onSave={(val) => updateItem(item.id, 'prepared', val)}
-                        className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        className="editable-cell text-gray-600 text-sm text-right justify-end"
+                        showPencil
                       />
-                    </td>
-                    <td>
-                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
-                        {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
-                      </span>
                     </td>
                     <td>
                       <div className="flex justify-center">
@@ -1003,12 +1054,18 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                           onSave={(val) => updateItem(item.id, 'unitCost', val)}
                           isCurrency
                           className="editable-cell text-gray-600 text-sm text-right justify-end"
+                          showPencil
                         />
                       )}
                     </td>
                     <td>
                       <span className="editable-cell text-sm text-right justify-end text-gray-600">
                         {item.cogs > 0 ? formatCurrency(item.cogs) : '—'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
+                        {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
                       </span>
                     </td>
                     <td>
@@ -1022,17 +1079,6 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                         )}
                       </span>
                     </td>
-                    <td>
-                      <button
-                        onClick={() => deleteItem(item.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-all"
-                        title="Delete item"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </td>
                   </tr>
                 ))}
                 {/* Totals Row */}
@@ -1040,14 +1086,10 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                   <td>
                     <span className="editable-cell font-bold text-gray-900">Total</span>
                   </td>
+                  <td></td>
                   <td>
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="editable-cell text-gray-900 text-sm text-right justify-end font-semibold">
                       {items.reduce((sum, i) => sum + i.prepared, 0)}
-                    </span>
-                  </td>
-                  <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
-                      {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
                     </span>
                   </td>
                   <td></td>
@@ -1062,6 +1104,11 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                     </span>
                   </td>
                   <td>
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                      {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
+                    </span>
+                  </td>
+                  <td>
                     <span className="editable-cell text-sm text-right justify-end">
                       {(() => {
                         const totalProfit = items.reduce((sum, i) => sum + i.profit, 0);
@@ -1073,7 +1120,6 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                       })()}
                     </span>
                   </td>
-                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -1123,19 +1169,22 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="p-4 border-b border-gray-100">
+          <div className="px-4 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Delivery Info</h3>
           </div>
           <div className="p-4 space-y-3">
             {/* Date Prepared */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between ">
               <span className="text-sm font-medium text-gray-500">Prepared</span>
               <div className="relative">
                 <button
                   onClick={() => setEditingDatePrepared(!editingDatePrepared)}
-                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 py-0.5 -mr-2 rounded transition-colors"
+                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 -mr-2 rounded transition-colors group/prep flex items-center gap-1.5"
                 >
                   {format(new Date(delivery.datePrepared + 'T00:00:00'), 'MMM d, yyyy')}
+                  <svg className="text-gray-300 group-hover/prep:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
                 </button>
                 {editingDatePrepared && (
                   <>
@@ -1155,7 +1204,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             </div>
 
             {/* Dropoff Date */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between ">
               <span className="text-sm font-medium text-gray-500">Dropoff</span>
               <div className="relative flex items-center gap-1">
                 {delivery.dropoffDate && (() => {
@@ -1181,12 +1230,15 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                 })()}
                 <button
                   onClick={() => setEditingDropoffDate(!editingDropoffDate)}
-                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 py-0.5 -mr-2 rounded transition-colors"
+                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 -mr-2 rounded transition-colors group/drop flex items-center gap-1.5"
                 >
                   {delivery.dropoffDate
                     ? format(new Date(delivery.dropoffDate + 'T00:00:00'), 'MMM d, yyyy')
                     : 'Set date'
                   }
+                  <svg className="text-gray-300 group-hover/drop:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
                 </button>
                 {editingDropoffDate && (
                   <>
@@ -1206,14 +1258,22 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             </div>
 
             {/* Expiration Date */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between ">
               <span className="text-sm font-medium text-gray-500">Expiration</span>
               {delivery.expirationDate ? (
-                <span className={`text-sm font-semibold px-2 py-0.5 -mr-2 ${expirationStatus.color}`}>
+                <span className={`text-sm font-semibold px-2 -mr-2 ${expirationStatus.color} flex items-center gap-1.5`}>
                   {format(new Date(delivery.expirationDate + 'T00:00:00'), 'MMM d, yyyy')}
+                  <svg className="invisible shrink-0" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
                 </span>
               ) : (
-                <span className="text-sm text-gray-400 px-2 py-0.5 -mr-2">Not set</span>
+                <span className="text-sm text-gray-400 px-2 -mr-2 flex items-center gap-1.5">
+                  Not set
+                  <svg className="invisible shrink-0" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </span>
               )}
             </div>
           </div>
@@ -1226,7 +1286,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="p-4 border-b border-gray-100">
+          <div className="px-4 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Invoice Details</h3>
           </div>
           <div className="p-4 space-y-3">
@@ -1270,13 +1330,13 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="p-4 border-b border-gray-100">
+          <div className="px-4 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Payments Collected</h3>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">💵</span>
+                <span className="text-sm">💵</span>
                 <span className="text-sm font-medium text-gray-700">Cash</span>
               </div>
               <EditableText
@@ -1288,7 +1348,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">📱</span>
+                <span className="text-sm">📱</span>
                 <span className="text-sm font-medium text-gray-700">Venmo</span>
               </div>
               <EditableText
@@ -1300,7 +1360,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-lg">💳</span>
+                <span className="text-sm">💳</span>
                 <span className="text-sm font-medium text-gray-700">Other</span>
               </div>
               <EditableText
@@ -1332,6 +1392,35 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
       </div>
     </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px]"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
+              contextMenu.confirm
+                ? 'text-red-600 bg-red-50 font-medium'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+            onClick={() => {
+              if (contextMenu.confirm) {
+                contextMenuDelete(contextMenu.itemId);
+              } else {
+                setContextMenu({ ...contextMenu, confirm: true });
+              }
+            }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            {contextMenu.confirm ? 'Confirm Delete' : 'Delete'}
+          </button>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && (
@@ -1521,20 +1610,24 @@ function EditableText({ value, onSave, className, allowEmpty = false, multiline 
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
+        size={Math.max(editValue.length, 1)}
         className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2`}
       />
     );
   }
 
   return (
-    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2 whitespace-pre-wrap`}>
+    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2 whitespace-pre-wrap group/edit flex items-center gap-2`}>
       {value}
+      <svg className="text-gray-300 group-hover/edit:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+      </svg>
     </div>
   );
 }
 
 // Editable Number Component for table cells
-function EditableNumber({ value, onSave, isCurrency = false, className, inline = false }: { value: number; onSave: (value: number) => void; isCurrency?: boolean; className?: string; inline?: boolean }) {
+function EditableNumber({ value, onSave, isCurrency = false, className, inline = false, showPencil = false }: { value: number; onSave: (value: number) => void; isCurrency?: boolean; className?: string; inline?: boolean; showPencil?: boolean }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(value.toString());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1587,18 +1680,26 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
         onKeyDown={handleKeyDown}
         className={inline
           ? "w-16 text-right text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
-          : "w-full text-center text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
+          : "w-full text-right text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
         }
       />
     );
   }
 
+  const pencilIcon = (
+    <svg className="text-gray-300 group-hover/num:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+    </svg>
+  );
+
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"}
+      className={`${className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
     >
+      {showPencil && pencilIcon}
       {formatDisplay(value)}
+      {inline && pencilIcon}
     </span>
   );
 }
@@ -1680,7 +1781,8 @@ function SortableHeader({
   currentSort,
   direction,
   onSort,
-  className = ''
+  className = '',
+  style
 }: {
   column: SortColumn;
   label: string;
@@ -1688,6 +1790,7 @@ function SortableHeader({
   direction: 'asc' | 'desc';
   onSort: (column: SortColumn) => void;
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const isActive = currentSort === column;
 
@@ -1695,12 +1798,15 @@ function SortableHeader({
     <th
       className={`${className} cursor-pointer hover:bg-gray-50 transition-colors select-none`}
       onClick={() => onSort(column)}
+      style={style}
     >
       <div className={`flex items-center gap-1 ${className.includes('text-right') ? 'justify-end' : className.includes('text-center') ? 'justify-center' : ''}`}>
         <span>{label}</span>
-        <span className={`text-[10px] ${isActive ? 'text-pink-500' : 'text-gray-300'}`}>
-          {isActive ? (direction === 'asc' ? '▲' : '▼') : '▲'}
-        </span>
+        {isActive && (
+          <span className="text-[10px] text-pink-500">
+            {direction === 'asc' ? '▲' : '▼'}
+          </span>
+        )}
       </div>
     </th>
   );

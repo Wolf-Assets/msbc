@@ -4,6 +4,7 @@ import '@fontsource/bricolage-grotesque/500.css';
 import '@fontsource/bricolage-grotesque/600.css';
 import '@fontsource/bricolage-grotesque/700.css';
 import './globals.css';
+import { NavLink } from './NavLink';
 
 export const metadata: Metadata = {
   title: 'Mighty Sweets Baking Co.',
@@ -24,7 +25,7 @@ export default function RootLayout({
         {/* Header */}
         <header className="bg-white sticky top-0 z-50">
           <div className="max-w-[1600px] mx-auto px-4 lg:px-8 py-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <a href="/" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
               <img
                 src="https://mightysweetbakingco.com/wp-content/uploads/2025/07/logo-1.png"
                 alt="Mighty Sweets Baking Co."
@@ -34,7 +35,7 @@ export default function RootLayout({
                 <h1 className="text-xl font-bold text-gray-900">Mighty Sweets Baking Co.</h1>
                 <p className="text-xs text-pink-500 font-medium">Inventory Manager</p>
               </div>
-            </div>
+            </a>
 
             <nav className="flex gap-1">
               <NavLink href="/">Home</NavLink>
@@ -54,13 +55,3 @@ export default function RootLayout({
   );
 }
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-pink-600 hover:bg-pink-50 transition-colors"
-    >
-      {children}
-    </a>
-  );
-}
