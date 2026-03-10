@@ -253,12 +253,6 @@
 }
 
 .animated-border {
-  position: relative;
-  border: 2px solid transparent;
-  background-origin: border-box;
-  background-clip: padding-box, border-box;
-  background-image:
-    linear-gradient(#ec4899, #ec4899),
-    conic-gradient(from var(--border-angle), #ec4899, #f9a8d4, #ffffff, #f9a8d4, #ec4899);
-  animation: border-spin 8s linear infinite, soft-glow 6s ease-in-out infinite;
+  background: #ec4899;
+  animation: soft-glow 6s ease-in-out infinite;
 }

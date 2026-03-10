@@ -210,6 +210,13 @@ export async function initializeDb(): Promise<void> {
     // ignore
   }
 
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    )
+  `);
+
   // Check if we have flavors data
   const flavorCountResult = await client.execute('SELECT COUNT(*) as count FROM flavors');
   const flavorCount = (flavorCountResult.rows[0] as unknown as CountResult).count;

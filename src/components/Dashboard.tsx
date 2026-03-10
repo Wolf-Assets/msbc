@@ -49,23 +49,38 @@ export default function Dashboard() {
   const [eventsMetric, setEventsMetric] = useState<'revenue' | 'profit'>('revenue');
   const [storesAgg, setStoresAgg] = useState<'total' | 'average'>('total');
   const [storesMetric, setStoresMetric] = useState<'revenue' | 'profit'>('revenue');
+  const [notes, setNotes] = useState('');
+  const saveTimeout = useState<ReturnType<typeof setTimeout> | null>(null);
 
-  // Fetch events and deliveries on mount
+  // Fetch events, deliveries, and notes on mount
   useEffect(() => {
     Promise.all([
       fetch('/api/events').then(res => res.json()),
       fetch('/api/deliveries').then(res => res.json()),
+      fetch('/api/settings?key=dashboard_notes').then(res => res.json()),
     ])
-      .then(([eventsData, deliveriesData]) => {
+      .then(([eventsData, deliveriesData, notesData]) => {
         setEvents(eventsData);
-        // Filter out archived deliveries
         setDeliveries((deliveriesData as Delivery[]).filter(d => !d.deletedAt));
+        setNotes(notesData.value ?? '');
         setLoading(false);
       })
       .catch(() => {
         setLoading(false);
       });
   }, []);
+
+  const handleNotesChange = (value: string) => {
+    setNotes(value);
+    if (saveTimeout[0]) clearTimeout(saveTimeout[0]);
+    saveTimeout[0] = setTimeout(() => {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'dashboard_notes', value }),
+      });
+    }, 800);
+  };
 
   if (loading) {
     return (
@@ -277,6 +292,18 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Notes box */}
+      <div className="bg-[#fafafc] rounded-2xl px-5 py-4">
+        <p className="text-xs font-medium uppercase tracking-widest text-gray-400 mb-2">Notes</p>
+        <textarea
+          value={notes}
+          onChange={e => handleNotesChange(e.target.value)}
+          placeholder="If you have any changes, type them here :)"
+          className="w-full bg-transparent text-sm text-gray-700 placeholder-gray-400 resize-none focus:outline-none border-0"
+          rows={2}
+        />
+      </div>
+
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
