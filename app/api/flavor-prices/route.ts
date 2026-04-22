@@ -67,8 +67,9 @@ export async function PUT(request: NextRequest) {
     for (const item of linkedDeliveryItems) {
       const newPrice = updated.price;
       const newCost = updated.cost ?? 0;
-      const newRevenue = item.prepared * newPrice;
-      const newCogs = item.prepared * newCost;
+      const prepared = item.prepared ?? 0;
+      const newRevenue = prepared * newPrice;
+      const newCogs = prepared * newCost;
       const newProfit = newRevenue - newCogs;
 
       await db.update(deliveryItems).set({
