@@ -56,6 +56,7 @@ interface EventItem {
   unitCost: number | null;
   cogs: number;
   profit: number;
+  rateId: number | null;
 }
 
 interface Flavor {
@@ -65,6 +66,28 @@ interface Flavor {
   unitCost: number | null;
 }
 
+interface FlavorPrice {
+  id: number;
+  flavorId: number;
+  tierName: string;
+  price: number;
+  cost: number | null;
+}
+
+// API response type for fetching a single event with its items
+interface EventWithItems extends Event {
+  items: EventItem[];
+}
+
+// Updatable fields on Event
+type EventField = keyof Event;
+
+// Updatable fields on EventItem
+type EventItemField = keyof EventItem;
+
+// Sort column type shared between EventDetail and SortableHeader
+type SortColumn = 'id' | 'flavorName' | 'prepared' | 'remaining' | 'giveaway' | 'sold' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
+
 interface EventDetailProps {
   eventId?: number;
 }
@@ -73,6 +96,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   const [event, setEvent] = useState<Event | null>(null);
   const [items, setItems] = useState<EventItem[]>([]);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
+  const [flavorPrices, setFlavorPrices] = useState<FlavorPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -84,14 +108,16 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     if (!eventId) return;
 
     Promise.all([
-      fetch(`/api/events?id=${eventId}`).then(res => res.json()),
-      fetch('/api/flavors').then(res => res.json()),
+      fetch(`/api/events?id=${eventId}`).then(res => res.json() as Promise<EventWithItems>),
+      fetch('/api/flavors').then(res => res.json() as Promise<Flavor[]>),
+      fetch('/api/flavor-prices').then(res => res.json() as Promise<FlavorPrice[]>),
     ])
-      .then(([eventData, flavorsData]) => {
+      .then(([eventData, flavorsData, pricesData]) => {
         const { items: eventItems, ...eventOnly } = eventData;
         setEvent(eventOnly);
         setItems(eventItems || []);
         setAvailableFlavors(flavorsData);
+        setFlavorPrices(pricesData);
         setLoading(false);
       })
       .catch(() => {
@@ -100,34 +126,13 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   }, [eventId]);
   const [editingDate, setEditingDate] = useState(false);
   const [showAddFlavor, setShowAddFlavor] = useState(false);
-  const [addFlavorMode, setAddFlavorMode] = useState<'select' | 'custom'>('select');
   const [selectedFlavorId, setSelectedFlavorId] = useState<number | ''>('');
-  const [customFlavorName, setCustomFlavorName] = useState('');
-  const [newItemData, setNewItemData] = useState({
-    prepared: 0,
-    unitCost: '',
-  });
+  const [selectedRateId, setSelectedRateId] = useState<number | ''>('');
+  const [newItemPrepared, setNewItemPrepared] = useState(0);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState(false);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: number; confirm: boolean } | null>(null);
   // Sorting state
-  type SortColumn = 'id' | 'flavorName' | 'prepared' | 'remaining' | 'giveaway' | 'sold' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  // Track which items use base cost vs custom cost (per item)
-  const [useBaseCost, setUseBaseCost] = useState<Record<number, boolean>>({});
-
-  // Initialize useBaseCost when items and flavors are loaded
-  useEffect(() => {
-    if (items.length > 0 && availableFlavors.length > 0) {
-      const initial: Record<number, boolean> = {};
-      items.forEach(item => {
-        const matchingFlavor = availableFlavors.find(f => f.name === item.flavorName);
-        initial[item.id] = matchingFlavor?.unitCost === item.unitCost;
-      });
-      setUseBaseCost(initial);
-    }
-  }, [items, availableFlavors]);
-
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
@@ -211,31 +216,36 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
   });
 
   const resetAddFlavorForm = () => {
-    setAddFlavorMode('select');
     setSelectedFlavorId('');
-    setCustomFlavorName('');
-    setNewItemData({ prepared: 0, unitCost: '' });
+    setSelectedRateId('');
+    setNewItemPrepared(0);
   };
 
   const handleAddFlavor = async () => {
-    let flavorName = '';
-    let unitCost: number | null = null;
-
-    if (addFlavorMode === 'select' && selectedFlavorId) {
-      const selectedFlavor = availableFlavors.find(f => f.id === selectedFlavorId);
-      if (selectedFlavor) {
-        flavorName = selectedFlavor.name;
-        unitCost = newItemData.unitCost ? parseFloat(newItemData.unitCost) : selectedFlavor.unitCost;
-      }
-    } else if (addFlavorMode === 'custom' && customFlavorName.trim()) {
-      flavorName = customFlavorName.trim();
-      unitCost = newItemData.unitCost ? parseFloat(newItemData.unitCost) : null;
-    }
-
-    if (!flavorName) {
-      showToast('Please select or enter a flavor name', 'error');
+    if (!selectedFlavorId) {
+      showToast('Please select a flavor', 'error');
       return;
     }
+
+    const selectedFlavor = availableFlavors.find(f => f.id === selectedFlavorId);
+    if (!selectedFlavor) {
+      showToast('Flavor not found', 'error');
+      return;
+    }
+
+    if (!selectedRateId) {
+      showToast('Please select a rate', 'error');
+      return;
+    }
+
+    const selectedRate = flavorPrices.find(p => p.id === selectedRateId);
+    if (!selectedRate) {
+      showToast('Rate not found', 'error');
+      return;
+    }
+
+    const flavorName = selectedFlavor.name;
+    const unitCost = selectedRate.cost;
 
     if (!event) return;
 
@@ -246,20 +256,21 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
         body: JSON.stringify({
           eventId: event.id,
           flavorName,
-          prepared: newItemData.prepared || 0,
-          remaining: newItemData.prepared || 0,
+          prepared: newItemPrepared || 0,
+          remaining: newItemPrepared || 0,
           giveaway: 0,
           sold: 0,
           revenue: 0,
           unitCost,
           cogs: 0,
           profit: 0,
+          rateId: selectedRate.id,
         }),
       });
 
       if (!response.ok) throw new Error('Failed to add');
 
-      const newItem = await response.json();
+      const newItem = await response.json() as EventItem;
       setItems(prev => [...prev, newItem]);
       setShowAddFlavor(false);
       resetAddFlavorForm();
@@ -268,7 +279,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       // Refresh event totals
       const eventResponse = await fetch(`/api/events?id=${event.id}`);
       if (eventResponse.ok) {
-        const updatedEvent = await eventResponse.json();
+        const updatedEvent = await eventResponse.json() as Event;
         setEvent(updatedEvent);
       }
     } catch {
@@ -302,7 +313,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     } catch {
       showToast('Failed to update date', 'error');
       // Refetch event on error
-      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(setEvent);
+      fetch(`/api/events?id=${eventId}`).then(res => res.json() as Promise<Event>).then(setEvent);
     }
   };
 
@@ -310,7 +321,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const updateEvent = async (field: string, value: string | number) => {
+  const updateEvent = async (field: EventField, value: string | number) => {
     if (!event) return;
     // Optimistic update
     setEvent((prev) => prev ? { ...prev, [field]: value } : null);
@@ -327,11 +338,11 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
     } catch {
       showToast('Failed to save', 'error');
       // Refetch event on error
-      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(setEvent);
+      fetch(`/api/events?id=${eventId}`).then(res => res.json() as Promise<Event>).then(setEvent);
     }
   };
 
-  const updateItem = async (itemId: number, field: string, value: number | null) => {
+  const updateItem = async (itemId: number, field: EventItemField, value: number | null) => {
     const item = items.find(i => i.id === itemId);
     if (!item || !event) return;
 
@@ -376,72 +387,31 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       // Refresh event totals
       const eventResponse = await fetch(`/api/events?id=${event.id}`);
       if (eventResponse.ok) {
-        const updatedEvent = await eventResponse.json();
+        const updatedEvent = await eventResponse.json() as Event;
         setEvent(updatedEvent);
       }
     } catch {
       showToast('Failed to save', 'error');
       // Refetch items on error
-      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json()).then(setItems);
+      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json() as Promise<EventItem[]>).then(setItems);
     }
   };
 
-  const getBaseCost = (flavorName: string): number | null => {
+  const getRatesForFlavor = (flavorName: string): FlavorPrice[] => {
     const flavor = availableFlavors.find(f => f.name === flavorName);
-    return flavor?.unitCost || null;
+    if (!flavor) return [];
+    return flavorPrices.filter(p => p.flavorId === flavor.id);
   };
 
-  const toggleBaseCost = async (itemId: number) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-
-    const newUseBase = !useBaseCost[itemId];
-    setUseBaseCost(prev => ({ ...prev, [itemId]: newUseBase }));
-
-    if (newUseBase) {
-      const baseCost = getBaseCost(item.flavorName);
-      if (baseCost !== null) {
-        await updateItem(itemId, 'unitCost', baseCost);
-      }
+  const getMatchingRate = (item: EventItem): string => {
+    if (item.rateId) {
+      const match = flavorPrices.find(p => p.id === item.rateId);
+      if (match) return match.tierName;
     }
-  };
-
-  // Close context menu on click outside or scroll
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener('click', close);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('scroll', close, true);
-    };
-  }, [contextMenu]);
-
-  const contextMenuDelete = async (itemId: number) => {
-    if (!event) return;
-    setContextMenu(null);
-    setItems(prev => prev.filter(i => i.id !== itemId));
-    try {
-      const response = await fetch('/api/event-items', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, eventId: event.id }),
-      });
-      if (!response.ok) throw new Error('Failed to delete');
-      showToast('Item deleted');
-      const eventResponse = await fetch(`/api/events?id=${event.id}`);
-      if (eventResponse.ok) {
-        const updatedEvent = await eventResponse.json();
-        setEvent(updatedEvent);
-      }
-    } catch {
-      showToast('Failed to delete', 'error');
-      fetch(`/api/events?id=${eventId}`).then(res => res.json()).then(data => {
-        const { items: eventItems, ...eventOnly } = data;
-        setItems(eventItems || []);
-      });
-    }
+    // Fallback: match by cost
+    const rates = getRatesForFlavor(item.flavorName);
+    const match = rates.find(r => r.cost === item.unitCost);
+    return match ? match.tierName : 'Custom';
   };
 
   const deleteItem = async (itemId: number) => {
@@ -463,13 +433,13 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       // Refresh event totals
       const eventResponse = await fetch(`/api/events?id=${event.id}`);
       if (eventResponse.ok) {
-        const updatedEvent = await eventResponse.json();
+        const updatedEvent = await eventResponse.json() as Event;
         setEvent(updatedEvent);
       }
     } catch {
       showToast('Failed to delete', 'error');
       // Refetch items on error
-      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json()).then(setItems);
+      fetch(`/api/event-items?eventId=${eventId}`).then(res => res.json() as Promise<EventItem[]>).then(setItems);
     }
   };
 
@@ -622,19 +592,16 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                   <SortableHeader column="sold" label="Sold" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
                   <SortableHeader column="giveaway" label="Giveaway" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
                   <SortableHeader column="remaining" label="Left" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-center" />
-                  <th className="text-center">Base</th>
-                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <th className="text-center">Rate</th>
                   <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                   <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                   <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {sortedItems.map((item) => (
-                  <tr key={item.id} className="group" onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id, confirm: false });
-                  }}>
+                  <tr key={item.id} className="group">
                     <td>
                       <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
                         {item.flavorName}
@@ -670,39 +637,46 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                         {item.remaining}
                       </span>
                     </td>
-                    <td>
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() => toggleBaseCost(item.id)}
-                          className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                            useBaseCost[item.id]
-                              ? 'bg-pink-500 border-pink-500 text-white'
-                              : 'border-gray-300 hover:border-pink-400'
-                          }`}
-                          title={useBaseCost[item.id] ? 'Using base cost' : 'Using custom cost'}
+                    <td className="pl-2">
+                      <div className="flex justify-start">
+                        <select
+                          value={getMatchingRate(item)}
+                          onChange={(e) => {
+                            const rateName = e.target.value;
+                            const rates = getRatesForFlavor(item.flavorName);
+                            const rate = rates.find(r => r.tierName === rateName);
+                            if (rate) {
+                              const newCost = rate.cost ?? 0;
+                              const newRevenue = item.sold * rate.price;
+                              const newCogs = item.sold * newCost;
+                              const allUpdates = {
+                                unitCost: newCost,
+                                rateId: rate.id,
+                                revenue: newRevenue,
+                                cogs: newCogs,
+                                profit: newRevenue - newCogs,
+                              };
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...allUpdates } : i));
+                              fetch('/api/event-items', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: item.id, eventId: event.id, ...allUpdates }),
+                              }).then(async () => {
+                                const res = await fetch(`/api/events?id=${event.id}`);
+                                if (res.ok) setEvent(await res.json() as Event);
+                              });
+                            }
+                          }}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
                         >
-                          {useBaseCost[item.id] && (
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
+                          {getRatesForFlavor(item.flavorName).map(rate => (
+                            <option key={rate.id} value={rate.tierName}>
+                              {rate.tierName} — ${rate.price.toFixed(2)}{rate.cost != null ? ` / $${rate.cost.toFixed(2)} cost` : ''}
+                            </option>
+                          ))}
+                          {getMatchingRate(item) === 'Custom' && <option value="Custom">Custom</option>}
+                        </select>
                       </div>
-                    </td>
-                    <td className="text-right">
-                      {useBaseCost[item.id] ? (
-                        <span className="editable-cell text-sm text-right justify-end text-gray-600">
-                          {item.unitCost ? formatCurrency(item.unitCost) : '—'}
-                        </span>
-                      ) : (
-                        <EditableNumber
-                          value={item.unitCost || 0}
-                          onSave={(val) => updateItem(item.id, 'unitCost', val)}
-                          isCurrency
-                          className="editable-cell text-gray-600 text-sm text-right justify-end"
-                          showPencil
-                        />
-                      )}
                     </td>
                     <td className="text-right">
                       <span className="editable-cell text-sm text-right justify-end text-gray-600">
@@ -724,6 +698,9 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                           '—'
                         )}
                       </span>
+                    </td>
+                    <td>
+                      <HoldDeleteButton onDelete={() => deleteItem(item.id)} />
                     </td>
                   </tr>
                 ))}
@@ -755,11 +732,6 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                   </td>
                   <td></td>
                   <td className="text-right">
-                    <span className="editable-cell text-sm text-right justify-end text-gray-400">
-                      —
-                    </span>
-                  </td>
-                  <td className="text-right">
                     <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
                       {formatCurrency(items.reduce((sum, i) => sum + i.cogs, 0))}
                     </span>
@@ -781,6 +753,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       })()}
                     </span>
                   </td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -922,35 +895,6 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       </div>
     </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px]"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
-              contextMenu.confirm
-                ? 'text-red-600 bg-red-50 font-medium'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-            onClick={() => {
-              if (contextMenu.confirm) {
-                contextMenuDelete(contextMenu.itemId);
-              } else {
-                setContextMenu({ ...contextMenu, confirm: true });
-              }
-            }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            {contextMenu.confirm ? 'Confirm Delete' : 'Delete'}
-          </button>
-        </div>
-      )}
-
       {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
@@ -966,79 +910,57 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
               <h3 className="text-xl font-bold text-gray-900 mb-4">Add Flavor to Event</h3>
 
-              {/* Mode Toggle */}
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-4">
-                <button
-                  onClick={() => setAddFlavorMode('select')}
-                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    addFlavorMode === 'select'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Flavor</label>
+                <select
+                  value={selectedFlavorId}
+                  onChange={(e) => {
+                    const fId = e.target.value ? parseInt(e.target.value) : '';
+                    setSelectedFlavorId(fId);
+                    if (fId) {
+                      const rates = flavorPrices.filter(p => p.flavorId === fId);
+                      setSelectedRateId(rates.length > 0 ? rates[0].id : '');
+                    } else {
+                      setSelectedRateId('');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
-                  Select Existing
-                </button>
-                <button
-                  onClick={() => setAddFlavorMode('custom')}
-                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    addFlavorMode === 'custom'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Custom (One-off)
-                </button>
+                  <option value="">Choose a flavor...</option>
+                  {availableFlavors.map(flavor => (
+                    <option key={flavor.id} value={flavor.id}>
+                      {flavor.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {addFlavorMode === 'select' ? (
+              {selectedFlavorId && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Flavor</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
                   <select
-                    value={selectedFlavorId}
-                    onChange={(e) => setSelectedFlavorId(e.target.value ? parseInt(e.target.value) : '')}
+                    value={selectedRateId}
+                    onChange={(e) => setSelectedRateId(e.target.value ? parseInt(e.target.value) : '')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   >
-                    <option value="">Choose a flavor...</option>
-                    {availableFlavors.map(flavor => (
-                      <option key={flavor.id} value={flavor.id}>
-                        {flavor.name} {flavor.unitCost ? `($${flavor.unitCost.toFixed(2)} cost)` : ''}
+                    <option value="">Choose a rate...</option>
+                    {flavorPrices.filter(p => p.flavorId === selectedFlavorId).map(rate => (
+                      <option key={rate.id} value={rate.id}>
+                        {rate.tierName} — ${rate.price.toFixed(2)}{rate.cost != null ? ` / $${rate.cost.toFixed(2)} cost` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
-              ) : (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Custom Flavor Name</label>
-                  <input
-                    type="text"
-                    value={customFlavorName}
-                    onChange={(e) => setCustomFlavorName(e.target.value)}
-                    placeholder="Enter flavor name..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
-                  <input
-                    type="number"
-                    value={newItemData.prepared}
-                    onChange={(e) => setNewItemData(prev => ({ ...prev, prepared: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost (optional)</label>
-                  <input
-                    type="text"
-                    value={newItemData.unitCost}
-                    onChange={(e) => setNewItemData(prev => ({ ...prev, unitCost: e.target.value }))}
-                    placeholder={addFlavorMode === 'select' && selectedFlavorId ? 'Use default' : '$0.00'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
+                <input
+                  type="number"
+                  value={newItemPrepared}
+                  onChange={(e) => setNewItemPrepared(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                />
               </div>
 
               <div className="flex gap-3">
@@ -1419,9 +1341,75 @@ function NotesEditor({ content, onSave }: { content: string; onSave: (content: s
   );
 }
 
-// Sortable Header Component
-type SortColumn = 'id' | 'flavorName' | 'prepared' | 'remaining' | 'giveaway' | 'sold' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
+// Hold-to-Delete Button Component
+function HoldDeleteButton({ onDelete }: { onDelete: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+  const holdDuration = 800;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
 
+  const startHold = useCallback(() => {
+    setHolding(true);
+    setReady(false);
+    startTimeRef.current = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current;
+      const pct = Math.min(elapsed / holdDuration, 1);
+      setProgress(pct);
+      if (pct >= 1) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        setReady(true);
+      }
+    }, 16);
+  }, [holdDuration]);
+
+  const releaseHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (ready) { onDelete(); }
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, [ready, onDelete]);
+
+  const cancelHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, []);
+
+  return (
+    <button
+      onMouseDown={startHold}
+      onMouseUp={releaseHold}
+      onMouseLeave={cancelHold}
+      onTouchStart={startHold}
+      onTouchEnd={releaseHold}
+      className="relative overflow-hidden rounded-full w-16 py-1 text-xs font-medium transition-all select-none text-center"
+      style={{
+        background: holding
+          ? `linear-gradient(90deg, rgba(239,68,68,${0.3 + progress * 0.7}) ${progress * 100}%, #fef2f2 ${progress * 100}%)`
+          : '#fef2f2',
+        color: progress > 0.5 ? 'white' : '#ef4444',
+        border: `1px solid ${progress > 0 ? `rgba(239,68,68,${0.3 + progress * 0.7})` : '#fecaca'}`,
+      }}
+      title="Hold to delete"
+    >
+      {progress > 0 ? (progress >= 0.8 ? 'Release' : 'Hold...') : 'Delete'}
+    </button>
+  );
+}
+
+// Sortable Header Component
 function SortableHeader({
   column,
   label,

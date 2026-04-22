@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import {
   XAxis,
   YAxis,
@@ -38,12 +38,58 @@ interface Delivery {
   deletedAt: string | null;
 }
 
+interface MonthlyTrendPoint {
+  month: string;
+  revenue: number;
+  profit: number;
+  count: number;
+}
+
+interface AggregatedEntry {
+  name: string;
+  totalRevenue: number;
+  totalProfit: number;
+  avgRevenue: number;
+  avgProfit: number;
+  count: number;
+}
+
+interface MarginEntry {
+  name: string;
+  fullName: string;
+  margin: number;
+  count?: number;
+}
+
+interface DayOfWeekEntry {
+  day: string;
+  revenue: number;
+  profit: number;
+  avgRevenue: number;
+  avgProfit: number;
+  count: number;
+}
+
+interface VenuePerformanceEntry {
+  name: string;
+  visits: number;
+  totalRevenue: number;
+  avgRevenue: number;
+  avgProfit: number;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value: number; name: string; color: string }>;
+  label?: string;
+}
+
 const CHART_PINK = '#ec4899';
 
 export default function Dashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const [revenueView, setRevenueView] = useState<'monthly' | 'daily'>('monthly');
   const [eventsAgg, setEventsAgg] = useState<'total' | 'average'>('total');
   const [eventsMetric, setEventsMetric] = useState<'revenue' | 'profit'>('revenue');
@@ -53,13 +99,13 @@ export default function Dashboard() {
   // Fetch events and deliveries on mount
   useEffect(() => {
     Promise.all([
-      fetch('/api/events').then(res => res.json()),
-      fetch('/api/deliveries').then(res => res.json()),
+      fetch('/api/events').then((res: Response) => res.json() as Promise<Event[]>),
+      fetch('/api/deliveries').then((res: Response) => res.json() as Promise<Delivery[]>),
     ])
-      .then(([eventsData, deliveriesData]) => {
+      .then(([eventsData, deliveriesData]: [Event[], Delivery[]]) => {
         setEvents(eventsData);
         // Filter out archived deliveries
-        setDeliveries((deliveriesData as Delivery[]).filter(d => !d.deletedAt));
+        setDeliveries(deliveriesData.filter((d: Delivery) => !d.deletedAt));
         setLoading(false);
       })
       .catch(() => {
@@ -257,7 +303,7 @@ export default function Dashboard() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
   };
 
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-100 text-sm">
@@ -360,7 +406,7 @@ export default function Dashboard() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} interval={0} />
-                <YAxis tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} type="number" scale="linear" />
+                <YAxis tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="revenue" stroke={CHART_PINK} strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue" />
                 <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 3 }} name="Profit" />
@@ -372,15 +418,16 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="day" xAxisId="revenue" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} allowDuplicatedCategory={false} />
                 <XAxis dataKey="day" xAxisId="profit" hide height={0} />
-                <YAxis tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} type="number" scale="linear" />
+                <YAxis tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
                 <Tooltip
-                  formatter={(value, name) => [
+                  formatter={(value: number | string | undefined, name: string | undefined) => [
                     formatCurrency(value as number),
                     name === 'avgRevenue' ? 'Revenue' : 'Profit'
                   ]}
-                  labelFormatter={(label) => {
-                    const day = revenueByDay.find(d => d.day === label);
-                    return day ? `${label} (${day.count} source${day.count > 1 ? 's' : ''})` : label;
+                  labelFormatter={(label: ReactNode) => {
+                    const labelStr = String(label);
+                    const day = revenueByDay.find((d: DayOfWeekEntry) => d.day === labelStr);
+                    return day ? `${labelStr} (${day.count} source${day.count > 1 ? 's' : ''})` : labelStr;
                   }}
                 />
                 <Bar dataKey="avgRevenue" fill={CHART_PINK} radius={[4, 4, 0, 0]} name="avgRevenue" xAxisId="revenue" />
@@ -581,16 +628,17 @@ export default function Dashboard() {
                 axisLine={false}
                 tickLine={false}
                 domain={[minMargin, maxMargin]}
-                tickFormatter={(v) => `${v}%`}
+                tickFormatter={(v: number) => `${v}%`}
                 type="number"
                 scale="linear"
                 allowDataOverflow={true}
               />
               <Tooltip
-                formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Margin']}
-                labelFormatter={(label) => {
-                  const event = marginByEvent.find(e => e.name === label);
-                  return event ? `${event.fullName} (${event.count}x)` : label;
+                formatter={(value: number | string | undefined) => [`${(value as number).toFixed(1)}%`, 'Margin']}
+                labelFormatter={(label: ReactNode) => {
+                  const labelStr = String(label);
+                  const event = marginByEvent.find((e: MarginEntry) => e.name === labelStr);
+                  return event ? `${event.fullName} (${event.count}x)` : labelStr;
                 }}
               />
               <Line
@@ -648,13 +696,13 @@ export default function Dashboard() {
                 axisLine={false}
                 tickLine={false}
                 domain={[minMargin, maxMargin]}
-                tickFormatter={(v) => `${v}%`}
+                tickFormatter={(v: number) => `${v}%`}
                 type="number"
                 scale="linear"
                 allowDataOverflow={true}
               />
               <Tooltip
-                formatter={(value) => [`${(value as number).toFixed(1)}%`, 'Margin']}
+                formatter={(value: number | string | undefined) => [`${(value as number).toFixed(1)}%`, 'Margin']}
               />
               <Line
                 type="monotone"

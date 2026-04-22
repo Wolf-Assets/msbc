@@ -3,6 +3,38 @@ import { db } from '@/db';
 import { eventItems, events } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+interface CreateEventItemBody {
+  eventId: number;
+  flavorName: string;
+  prepared?: number;
+  remaining?: number;
+  giveaway?: number;
+  sold?: number;
+  revenue?: number;
+  unitCost?: number | null;
+  cogs?: number;
+  profit?: number;
+}
+
+interface UpdateEventItemBody {
+  id: number;
+  eventId?: number;
+  flavorName?: string;
+  prepared?: number;
+  remaining?: number;
+  giveaway?: number;
+  sold?: number;
+  revenue?: number;
+  unitCost?: number | null;
+  cogs?: number;
+  profit?: number;
+}
+
+interface DeleteEventItemBody {
+  id: number;
+  eventId?: number;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get('eventId');
@@ -17,7 +49,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: CreateEventItemBody = await request.json();
 
   const result = await db.insert(eventItems).values({
     eventId: body.eventId,
@@ -39,7 +71,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
+  const body: UpdateEventItemBody = await request.json();
   const { id, eventId, ...updates } = body;
 
   await db.update(eventItems).set(updates).where(eq(eventItems.id, id));
@@ -50,11 +82,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const updated = await db.select().from(eventItems).where(eq(eventItems.id, id)).get();
-  return NextResponse.json(updated);
+  return NextResponse.json(JSON.parse(JSON.stringify(updated, (_key: string, v: unknown) => typeof v === 'bigint' ? Number(v) : v)));
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
+  const body: DeleteEventItemBody = await request.json();
   const { id, eventId } = body;
 
   await db.delete(eventItems).where(eq(eventItems.id, id));
@@ -70,11 +102,11 @@ export async function DELETE(request: NextRequest) {
 async function recalculateEventTotals(eventId: number) {
   const items = await db.select().from(eventItems).where(eq(eventItems.eventId, eventId));
 
-  const totalPrepared = items.reduce((sum, i) => sum + (i.prepared || 0), 0);
-  const totalSold = items.reduce((sum, i) => sum + (i.sold || 0), 0);
-  const totalGiveaway = items.reduce((sum, i) => sum + (i.giveaway || 0), 0);
-  const totalRevenue = items.reduce((sum, i) => sum + (i.revenue || 0), 0);
-  const totalCost = items.reduce((sum, i) => sum + (i.cogs || 0), 0);
+  const totalPrepared = items.reduce((sum: number, i) => sum + (i.prepared || 0), 0);
+  const totalSold = items.reduce((sum: number, i) => sum + (i.sold || 0), 0);
+  const totalGiveaway = items.reduce((sum: number, i) => sum + (i.giveaway || 0), 0);
+  const totalRevenue = items.reduce((sum: number, i) => sum + (i.revenue || 0), 0);
+  const totalCost = items.reduce((sum: number, i) => sum + (i.cogs || 0), 0);
 
   const netProfit = totalRevenue - totalCost;
 

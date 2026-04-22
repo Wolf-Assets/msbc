@@ -41,6 +41,7 @@ export const eventItems = sqliteTable('event_items', {
   unitCost: real('unit_cost'),
   cogs: real('cogs').default(0),
   profit: real('profit').default(0),
+  rateId: integer('rate_id'),
 });
 
 export const deliveries = sqliteTable('deliveries', {
@@ -76,6 +77,15 @@ export const deliveryItems = sqliteTable('delivery_items', {
   revenue: real('revenue').default(0),
   cogs: real('cogs').default(0),
   profit: real('profit').default(0),
+  rateId: integer('rate_id'),
+});
+
+export const flavorPrices = sqliteTable('flavor_prices', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  flavorId: integer('flavor_id').notNull(),
+  tierName: text('tier_name').notNull(),
+  price: real('price').notNull(),
+  cost: real('cost'),
 });
 
 export type Flavor = typeof flavors.$inferSelect;
@@ -88,3 +98,5 @@ export type Delivery = typeof deliveries.$inferSelect;
 export type NewDelivery = typeof deliveries.$inferInsert;
 export type DeliveryItem = typeof deliveryItems.$inferSelect;
 export type NewDeliveryItem = typeof deliveryItems.$inferInsert;
+export type FlavorPrice = typeof flavorPrices.$inferSelect;
+export type NewFlavorPrice = typeof flavorPrices.$inferInsert;

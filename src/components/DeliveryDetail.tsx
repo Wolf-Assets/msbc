@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, ComponentType } from 'react';
+import { useState, useRef, useEffect, useCallback, ComponentType } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import 'react-day-picker/style.css';
@@ -50,6 +50,7 @@ interface DeliveryItem {
   revenue: number;
   cogs: number;
   profit: number;
+  rateId: number | null;
 }
 
 interface Flavor {
@@ -60,6 +61,30 @@ interface Flavor {
   isActive: boolean;
 }
 
+interface FlavorPrice {
+  id: number;
+  flavorId: number;
+  tierName: string;
+  price: number;
+  cost: number | null;
+}
+
+interface RenderViaCanvasOpts {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  maxWidth?: number;
+}
+
+interface NewItemData {
+  prepared: number;
+  unitCost: string;
+}
+
+type DeliveryField = keyof Delivery;
+
+type DeliveryItemField = 'prepared' | 'unitPrice' | 'unitCost' | 'rateId';
+
 interface DeliveryDetailProps {
   deliveryId: number;
 }
@@ -68,6 +93,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [items, setItems] = useState<DeliveryItem[]>([]);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
+  const [flavorPrices, setFlavorPrices] = useState<FlavorPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -76,14 +102,16 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
     if (!deliveryId) return;
 
     Promise.all([
-      fetch(`/api/deliveries?id=${deliveryId}`).then(res => res.json()),
-      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then(res => res.json()),
-      fetch('/api/flavors').then(res => res.json()),
+      fetch(`/api/deliveries?id=${deliveryId}`).then((res: Response) => res.json() as Promise<Delivery>),
+      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then((res: Response) => res.json() as Promise<DeliveryItem[]>),
+      fetch('/api/flavors').then((res: Response) => res.json() as Promise<Flavor[]>),
+      fetch('/api/flavor-prices').then((res: Response) => res.json() as Promise<FlavorPrice[]>),
     ])
-      .then(([deliveryData, itemsData, flavorsData]) => {
+      .then(([deliveryData, itemsData, flavorsData, pricesData]: [Delivery, DeliveryItem[], Flavor[], FlavorPrice[]]) => {
         setDelivery(deliveryData);
         setItems(itemsData || []);
         setAvailableFlavors(flavorsData);
+        setFlavorPrices(pricesData);
         setLoading(false);
       })
       .catch(() => {
@@ -94,10 +122,9 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
   const [editingDatePrepared, setEditingDatePrepared] = useState(false);
   const [editingDropoffDate, setEditingDropoffDate] = useState(false);
   const [showAddFlavor, setShowAddFlavor] = useState(false);
-  const [addFlavorMode, setAddFlavorMode] = useState<'select' | 'custom'>('select');
   const [selectedFlavorId, setSelectedFlavorId] = useState<number | ''>('');
-  const [customFlavorName, setCustomFlavorName] = useState('');
-  const [newItemData, setNewItemData] = useState({
+  const [selectedRateId, setSelectedRateId] = useState<number | ''>('');
+  const [newItemData, setNewItemData] = useState<NewItemData>({
     prepared: 0,
     unitCost: '',
   });
@@ -107,21 +134,6 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
   type SortColumn = 'id' | 'flavorName' | 'prepared' | 'revenue' | 'unitCost' | 'cogs' | 'profit';
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-
-  // Track which items use base cost vs custom cost (per item)
-  const [useBaseCost, setUseBaseCost] = useState<Record<number, boolean>>({});
-
-  // Initialize useBaseCost when items and flavors are loaded
-  useEffect(() => {
-    if (items.length > 0 && availableFlavors.length > 0) {
-      const initial: Record<number, boolean> = {};
-      items.forEach(item => {
-        const matchingFlavor = availableFlavors.find(f => f.name === item.flavorName);
-        initial[item.id] = matchingFlavor?.unitCost === item.unitCost;
-      });
-      setUseBaseCost(initial);
-    }
-  }, [items, availableFlavors]);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setToast({ message, type });
@@ -206,35 +218,41 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
   });
 
   const resetAddFlavorForm = () => {
-    setAddFlavorMode('select');
     setSelectedFlavorId('');
-    setCustomFlavorName('');
+    setSelectedRateId('');
     setNewItemData({ prepared: 0, unitCost: '' });
   };
 
   const handleAddFlavor = async () => {
-    let flavorName = '';
-    let unitCost: number | null = null;
-    let unitPrice: number | null = null;
-
-    if (addFlavorMode === 'select' && selectedFlavorId) {
-      const selectedFlavor = availableFlavors.find(f => f.id === selectedFlavorId);
-      if (selectedFlavor) {
-        flavorName = selectedFlavor.name;
-        unitCost = newItemData.unitCost ? parseFloat(newItemData.unitCost) : selectedFlavor.unitCost;
-        unitPrice = selectedFlavor.unitPrice;
-      }
-    } else if (addFlavorMode === 'custom' && customFlavorName.trim()) {
-      flavorName = customFlavorName.trim();
-      unitCost = newItemData.unitCost ? parseFloat(newItemData.unitCost) : null;
-    }
-
-    if (!flavorName) {
-      showToast('Please select or enter a flavor name', 'error');
+    if (!selectedFlavorId) {
+      showToast('Please select a flavor', 'error');
       return;
     }
 
+    const selectedFlavor = availableFlavors.find(f => f.id === selectedFlavorId);
+    if (!selectedFlavor) {
+      showToast('Flavor not found', 'error');
+      return;
+    }
+
+    if (!selectedRateId) {
+      showToast('Please select a rate', 'error');
+      return;
+    }
+
+    const selectedRate = flavorPrices.find(p => p.id === selectedRateId);
+    if (!selectedRate) {
+      showToast('Rate not found', 'error');
+      return;
+    }
+
+    const flavorName = selectedFlavor.name;
+    const unitPrice = selectedRate.price;
+    const unitCost = selectedRate.cost ?? 0;
+
     if (!delivery) return;
+
+    const qty = newItemData.prepared || 0;
 
     try {
       const response = await fetch('/api/delivery-items', {
@@ -243,18 +261,19 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         body: JSON.stringify({
           deliveryId: delivery.id,
           flavorName,
-          prepared: newItemData.prepared || 0,
+          prepared: qty,
           unitPrice,
           unitCost,
-          revenue: (newItemData.prepared || 0) * (unitPrice || 0),
-          cogs: (newItemData.prepared || 0) * (unitCost || 0),
-          profit: (newItemData.prepared || 0) * ((unitPrice || 0) - (unitCost || 0)),
+          rateId: selectedRate.id,
+          revenue: qty * unitPrice,
+          cogs: qty * unitCost,
+          profit: qty * (unitPrice - unitCost),
         }),
       });
 
       if (!response.ok) throw new Error('Failed to add');
 
-      const newItem = await response.json();
+      const newItem: DeliveryItem = await response.json() as DeliveryItem;
       setItems(prev => [...prev, newItem]);
       setShowAddFlavor(false);
       resetAddFlavorForm();
@@ -263,7 +282,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       // Refresh delivery totals
       const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
       if (deliveryResponse.ok) {
-        const updatedDelivery = await deliveryResponse.json();
+        const updatedDelivery: Delivery = await deliveryResponse.json() as Delivery;
         setDelivery(updatedDelivery);
       }
     } catch {
@@ -301,7 +320,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       showToast('Date updated');
     } catch {
       showToast('Failed to update date', 'error');
-      fetch(`/api/deliveries?id=${deliveryId}`).then(res => res.json()).then(setDelivery);
+      fetch(`/api/deliveries?id=${deliveryId}`).then((res: Response) => res.json() as Promise<Delivery>).then(setDelivery);
     }
   };
 
@@ -325,7 +344,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       showToast('Dropoff date updated');
     } catch {
       showToast('Failed to update dropoff date', 'error');
-      fetch(`/api/deliveries?id=${deliveryId}`).then(res => res.json()).then(setDelivery);
+      fetch(`/api/deliveries?id=${deliveryId}`).then((res: Response) => res.json() as Promise<Delivery>).then(setDelivery);
     }
   };
 
@@ -333,7 +352,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const updateDelivery = async (field: string, value: string | number | null) => {
+  const updateDelivery = async (field: DeliveryField, value: string | number | null) => {
     if (!delivery) return;
     // Optimistic update
     setDelivery((prev) => prev ? { ...prev, [field]: value } : null);
@@ -349,11 +368,11 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       showToast('Saved');
     } catch {
       showToast('Failed to save', 'error');
-      fetch(`/api/deliveries?id=${deliveryId}`).then(res => res.json()).then(setDelivery);
+      fetch(`/api/deliveries?id=${deliveryId}`).then((res: Response) => res.json() as Promise<Delivery>).then(setDelivery);
     }
   };
 
-  const updateItem = async (itemId: number, field: string, value: number | null) => {
+  const updateItem = async (itemId: number, field: DeliveryItemField, value: number | null) => {
     const item = items.find(i => i.id === itemId);
     if (!item || !delivery) return;
 
@@ -391,65 +410,34 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       // Refresh delivery totals
       const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
       if (deliveryResponse.ok) {
-        const updatedDelivery = await deliveryResponse.json();
+        const updatedDelivery: Delivery = await deliveryResponse.json() as Delivery;
         setDelivery(updatedDelivery);
       }
     } catch {
       showToast('Failed to save', 'error');
-      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then(res => res.json()).then(setItems);
+      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then((res: Response) => res.json() as Promise<DeliveryItem[]>).then(setItems);
     }
   };
 
-  const getBaseCost = (flavorName: string): number | null => {
+  const getRatesForFlavor = (flavorName: string): FlavorPrice[] => {
     const flavor = availableFlavors.find(f => f.name === flavorName);
-    return flavor?.unitCost || null;
+    if (!flavor) return [];
+    return flavorPrices.filter(p => p.flavorId === flavor.id);
   };
 
-  const toggleBaseCost = async (itemId: number) => {
-    const item = items.find(i => i.id === itemId);
-    if (!item) return;
-
-    const newUseBase = !useBaseCost[itemId];
-    setUseBaseCost(prev => ({ ...prev, [itemId]: newUseBase }));
-
-    if (newUseBase) {
-      const baseCost = getBaseCost(item.flavorName);
-      if (baseCost !== null) {
-        await updateItem(itemId, 'unitCost', baseCost);
-      }
+  const getMatchingRate = (item: DeliveryItem): string => {
+    if (item.rateId) {
+      const match = flavorPrices.find(p => p.id === item.rateId);
+      if (match) return match.tierName;
     }
+    // Fallback: match by price + cost
+    const rates = getRatesForFlavor(item.flavorName);
+    const match = rates.find(r => r.price === item.unitPrice && r.cost === item.unitCost);
+    return match ? match.tierName : 'Custom';
   };
-
-  const [pendingDeleteItem, setPendingDeleteItem] = useState<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; itemId: number; confirm: boolean } | null>(null);
-
-  // Reset pending item delete after 3 seconds
-  useEffect(() => {
-    if (pendingDeleteItem !== null) {
-      const timer = setTimeout(() => setPendingDeleteItem(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [pendingDeleteItem]);
-
-  // Close context menu on click outside or scroll
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    window.addEventListener('click', close);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('scroll', close, true);
-    };
-  }, [contextMenu]);
 
   const deleteItem = async (itemId: number) => {
     if (!delivery) return;
-    if (pendingDeleteItem !== itemId) {
-      setPendingDeleteItem(itemId);
-      return;
-    }
-    setPendingDeleteItem(null);
     // Optimistic update
     setItems(prev => prev.filter(i => i.id !== itemId));
 
@@ -467,37 +455,15 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       // Refresh delivery totals
       const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
       if (deliveryResponse.ok) {
-        const updatedDelivery = await deliveryResponse.json();
+        const updatedDelivery: Delivery = await deliveryResponse.json() as Delivery;
         setDelivery(updatedDelivery);
       }
     } catch {
       showToast('Failed to delete', 'error');
-      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then(res => res.json()).then(setItems);
+      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then((res: Response) => res.json() as Promise<DeliveryItem[]>).then(setItems);
     }
   };
 
-  const contextMenuDelete = async (itemId: number) => {
-    if (!delivery) return;
-    setContextMenu(null);
-    setItems(prev => prev.filter(i => i.id !== itemId));
-    try {
-      const response = await fetch('/api/delivery-items', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, deliveryId: delivery.id }),
-      });
-      if (!response.ok) throw new Error('Failed to delete');
-      showToast('Item deleted');
-      const deliveryResponse = await fetch(`/api/deliveries?id=${delivery.id}`);
-      if (deliveryResponse.ok) {
-        const updatedDelivery = await deliveryResponse.json();
-        setDelivery(updatedDelivery);
-      }
-    } catch {
-      showToast('Failed to delete', 'error');
-      fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then(res => res.json()).then(setItems);
-    }
-  };
 
   const getExpirationStatus = (expirationDate: string | null): { color: string; bgColor: string } => {
     if (!expirationDate) return { color: 'text-gray-500', bgColor: 'bg-gray-100' };
@@ -542,7 +508,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       doc.addImage(mightySweetsLogo, 'PNG', 196 - logoW, 10, logoW, logoH);
 
       // Invoice meta lines — label : value aligned
-      const shortDate = (d: string) => {
+      const shortDate = (d: string): string => {
         const date = new Date(d + 'T00:00:00');
         return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
       };
@@ -563,7 +529,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
       // Company name in bold after a line break
       doc.setFont('BricolageGrotesque', 'bold');
-      doc.text('Mighty Sweets Baking Co.', 14, 55);
+      doc.text('Mighty Sweet Baking Co.', 14, 55);
       doc.setFont('BricolageGrotesque', 'normal');
       doc.text('Niskayuna, NY 12309', 14, 60);
       doc.text('United States', 14, 65);
@@ -743,7 +709,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         const tempDiv = typeof document !== 'undefined' ? document.createElement('div') : null;
 
         // Helper: render text via canvas (for italic — browser synthesizes italic from regular font)
-        const renderViaCanvas = (text: string, x: number, yPos: number, opts: { bold?: boolean; italic?: boolean; underline?: boolean; maxWidth?: number }) => {
+        const renderViaCanvas = (text: string, x: number, yPos: number, opts: RenderViaCanvasOpts): { width: number; height: number } => {
           const dpr = 4;
           const ptSize = 11 * (96 / 72); // convert PDF points to CSS px equivalent
           const pxSize = ptSize * dpr;
@@ -779,7 +745,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         };
 
         // Helper: render a text segment with full formatting
-        const renderText = (text: string, x: number, yPos: number, bold: boolean, italic: boolean, underline: boolean, maxW: number) => {
+        const renderText = (text: string, x: number, yPos: number, bold: boolean, italic: boolean, underline: boolean, maxW: number): void => {
           if (italic) {
             const { width } = renderViaCanvas(text, x, yPos, { bold, italic: true, underline, maxWidth: maxW });
             const lines = doc.splitTextToSize(text, maxW);
@@ -800,7 +766,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
         if (tempDiv) {
           tempDiv.innerHTML = noteHtml;
-          const processNode = (node: Node) => {
+          const processNode = (node: Node): void => {
             if (node.nodeType === Node.TEXT_NODE) {
               const text = node.textContent || '';
               if (text.trim()) {
@@ -836,7 +802,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         }
       }
 
-      // Made with ❤️ by Mighty Sweets Baking Co. — near footer, centered
+      // Made with ❤️ by Mighty Sweet Baking Co. — near footer, centered
       const pageHeight = doc.internal.pageSize.height;
       y = Math.max(y + 20, pageHeight - 18);
       doc.setFontSize(11);
@@ -859,7 +825,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       doc.setTextColor(100);
       const seg1 = 'Made with ';
       const seg2 = ' by ';
-      const seg3 = 'Mighty Sweets Baking Co.';
+      const seg3 = 'Mighty Sweet Baking Co.';
       const seg1W = doc.getTextWidth(seg1);
       const seg2W = doc.getTextWidth(seg2);
       const seg3W = doc.getTextWidth(seg3);
@@ -878,7 +844,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       doc.text(seg2, loveX, y);
       loveX += seg2W;
 
-      // "Mighty Sweets Baking Co." — pink underlined
+      // "Mighty Sweet Baking Co." — pink underlined
       doc.setTextColor(236, 72, 153);
       doc.text(seg3, loveX, y);
       doc.setDrawColor(236, 72, 153);
@@ -996,26 +962,66 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                 <tr>
                   <th>Flavor</th>
                   <th style={{ width: '100%' }}></th>
+                  <th className="text-center">Rate</th>
                   <SortableHeader column="prepared" label="Qty" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
-                  <th className="text-center">Base</th>
-                  <SortableHeader column="unitCost" label="Cost" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                   <SortableHeader column="cogs" label="COGS" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                   <SortableHeader column="revenue" label="Revenue" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
                   <SortableHeader column="profit" label="Profit" currentSort={sortColumn} direction={sortDirection} onSort={handleSort} className="text-right" />
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {sortedItems.map((item) => (
-                  <tr key={item.id} className="group" onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id, confirm: false });
-                  }}>
+                  <tr key={item.id} className="group">
                     <td>
                       <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
                         {item.flavorName}
                       </span>
                     </td>
                     <td></td>
+                    <td className="pl-2">
+                      <div className="flex justify-start">
+                        <select
+                          value={getMatchingRate(item)}
+                          onChange={(e) => {
+                            const rateName = e.target.value;
+                            const rates = getRatesForFlavor(item.flavorName);
+                            const rate = rates.find(r => r.tierName === rateName);
+                            if (rate) {
+                              const newRevenue = item.prepared * rate.price;
+                              const newCogs = item.prepared * (rate.cost ?? 0);
+                              const allUpdates = {
+                                unitPrice: rate.price,
+                                unitCost: rate.cost ?? 0,
+                                rateId: rate.id,
+                                revenue: newRevenue,
+                                cogs: newCogs,
+                                profit: newRevenue - newCogs,
+                              };
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, ...allUpdates } : i));
+                              fetch('/api/delivery-items', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: item.id, deliveryId: delivery?.id, ...allUpdates }),
+                              }).then(async () => {
+                                if (delivery) {
+                                  const res = await fetch(`/api/deliveries?id=${delivery.id}`);
+                                  if (res.ok) setDelivery(await res.json() as Delivery);
+                                }
+                              });
+                            }
+                          }}
+                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
+                        >
+                          {getRatesForFlavor(item.flavorName).map(rate => (
+                            <option key={rate.id} value={rate.tierName}>
+                              {rate.tierName} — ${rate.price.toFixed(2)}{rate.cost != null ? ` / $${rate.cost.toFixed(2)} cost` : ''}
+                            </option>
+                          ))}
+                          {getMatchingRate(item) === 'Custom' && <option value="Custom">Custom</option>}
+                        </select>
+                      </div>
+                    </td>
                     <td>
                       <EditableNumber
                         value={item.prepared}
@@ -1023,40 +1029,6 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                         className="editable-cell text-gray-600 text-sm text-right justify-end"
                         showPencil
                       />
-                    </td>
-                    <td>
-                      <div className="flex justify-center">
-                        <button
-                          onClick={() => toggleBaseCost(item.id)}
-                          className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                            useBaseCost[item.id]
-                              ? 'bg-pink-500 border-pink-500 text-white'
-                              : 'border-gray-300 hover:border-pink-400'
-                          }`}
-                          title={useBaseCost[item.id] ? 'Using base cost' : 'Using custom cost'}
-                        >
-                          {useBaseCost[item.id] && (
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                    <td>
-                      {useBaseCost[item.id] ? (
-                        <span className="editable-cell text-sm text-right justify-end text-gray-600">
-                          {item.unitCost ? formatCurrency(item.unitCost) : '—'}
-                        </span>
-                      ) : (
-                        <EditableNumber
-                          value={item.unitCost || 0}
-                          onSave={(val) => updateItem(item.id, 'unitCost', val)}
-                          isCurrency
-                          className="editable-cell text-gray-600 text-sm text-right justify-end"
-                          showPencil
-                        />
-                      )}
                     </td>
                     <td>
                       <span className="editable-cell text-sm text-right justify-end text-gray-600">
@@ -1079,6 +1051,9 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                         )}
                       </span>
                     </td>
+                    <td>
+                      <HoldDeleteButton onDelete={() => deleteItem(item.id)} />
+                    </td>
                   </tr>
                 ))}
                 {/* Totals Row */}
@@ -1087,15 +1062,10 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                     <span className="editable-cell font-bold text-gray-900">Total</span>
                   </td>
                   <td></td>
+                  <td></td>
                   <td>
                     <span className="editable-cell text-gray-900 text-sm text-right justify-end font-semibold">
                       {items.reduce((sum, i) => sum + i.prepared, 0)}
-                    </span>
-                  </td>
-                  <td></td>
-                  <td>
-                    <span className="editable-cell text-sm text-right justify-end text-gray-400">
-                      —
                     </span>
                   </td>
                   <td>
@@ -1120,6 +1090,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                       })()}
                     </span>
                   </td>
+                  <td></td>
                 </tr>
               </tbody>
             </table>
@@ -1393,35 +1364,6 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       </div>
     </div>
 
-      {/* Context Menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-white rounded-lg shadow-xl border border-gray-200 py-1 min-w-[140px]"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
-              contextMenu.confirm
-                ? 'text-red-600 bg-red-50 font-medium'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-            onClick={() => {
-              if (contextMenu.confirm) {
-                contextMenuDelete(contextMenu.itemId);
-              } else {
-                setContextMenu({ ...contextMenu, confirm: true });
-              }
-            }}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-            {contextMenu.confirm ? 'Confirm Delete' : 'Delete'}
-          </button>
-        </div>
-      )}
-
       {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
@@ -1437,79 +1379,58 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
               <h3 className="text-xl font-bold text-gray-900 mb-4">Add Flavor to Delivery</h3>
 
-              {/* Mode Toggle */}
-              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg mb-4">
-                <button
-                  onClick={() => setAddFlavorMode('select')}
-                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    addFlavorMode === 'select'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Select Flavor</label>
+                <select
+                  value={selectedFlavorId}
+                  onChange={(e) => {
+                    const flavorId = e.target.value ? parseInt(e.target.value) : '';
+                    setSelectedFlavorId(flavorId);
+                    // Auto-select first available rate for this flavor
+                    if (flavorId) {
+                      const rates = flavorPrices.filter(p => p.flavorId === flavorId);
+                      setSelectedRateId(rates.length > 0 ? rates[0].id : '');
+                    } else {
+                      setSelectedRateId('');
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
-                  Select Existing
-                </button>
-                <button
-                  onClick={() => setAddFlavorMode('custom')}
-                  className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    addFlavorMode === 'custom'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Custom (One-off)
-                </button>
+                  <option value="">Choose a flavor...</option>
+                  {availableFlavors.filter(f => f.isActive).map(flavor => (
+                    <option key={flavor.id} value={flavor.id}>
+                      {flavor.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {addFlavorMode === 'select' ? (
+              {selectedFlavorId && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Flavor</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
                   <select
-                    value={selectedFlavorId}
-                    onChange={(e) => setSelectedFlavorId(e.target.value ? parseInt(e.target.value) : '')}
+                    value={selectedRateId}
+                    onChange={(e) => setSelectedRateId(e.target.value ? parseInt(e.target.value) : '')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   >
-                    <option value="">Choose a flavor...</option>
-                    {availableFlavors.filter(f => f.isActive).map(flavor => (
-                      <option key={flavor.id} value={flavor.id}>
-                        {flavor.name} {flavor.unitCost ? `($${flavor.unitCost.toFixed(2)} cost)` : ''}
+                    <option value="">Choose a rate...</option>
+                    {flavorPrices.filter(p => p.flavorId === selectedFlavorId).map(rate => (
+                      <option key={rate.id} value={rate.id}>
+                        {rate.tierName} — ${rate.price.toFixed(2)}{rate.cost != null ? ` / $${rate.cost.toFixed(2)} cost` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
-              ) : (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Custom Flavor Name</label>
-                  <input
-                    type="text"
-                    value={customFlavorName}
-                    onChange={(e) => setCustomFlavorName(e.target.value)}
-                    placeholder="Enter flavor name..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
-                  <input
-                    type="number"
-                    value={newItemData.prepared}
-                    onChange={(e) => setNewItemData(prev => ({ ...prev, prepared: parseInt(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit Cost (optional)</label>
-                  <input
-                    type="text"
-                    value={newItemData.unitCost}
-                    onChange={(e) => setNewItemData(prev => ({ ...prev, unitCost: e.target.value }))}
-                    placeholder={addFlavorMode === 'select' && selectedFlavorId ? 'Use default' : '$0.00'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
-                  />
-                </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
+                <input
+                  type="number"
+                  value={newItemData.prepared}
+                  onChange={(e) => setNewItemData(prev => ({ ...prev, prepared: parseInt(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                />
               </div>
 
               <div className="flex gap-3">
@@ -1769,6 +1690,78 @@ function NotesEditor({ content, onSave }: { content: string; onSave: (content: s
         placeholder="Add notes..."
       />
     </div>
+  );
+}
+
+// Hold-to-Delete Button Component
+function HoldDeleteButton({ onDelete }: { onDelete: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+  const holdDuration = 800;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
+
+  const startHold = useCallback(() => {
+    setHolding(true);
+    setReady(false);
+    startTimeRef.current = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current;
+      const pct = Math.min(elapsed / holdDuration, 1);
+      setProgress(pct);
+      if (pct >= 1) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        setReady(true);
+      }
+    }, 16);
+  }, [holdDuration]);
+
+  const releaseHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (ready) {
+      onDelete();
+    }
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, [ready, onDelete]);
+
+  const cancelHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  return (
+    <button
+      onMouseDown={startHold}
+      onMouseUp={releaseHold}
+      onMouseLeave={cancelHold}
+      onTouchStart={startHold}
+      onTouchEnd={releaseHold}
+      className="relative overflow-hidden rounded-full w-16 py-1 text-xs font-medium transition-all select-none text-center"
+      style={{
+        background: holding
+          ? `linear-gradient(90deg, rgba(239,68,68,${0.3 + progress * 0.7}) ${progress * 100}%, #fef2f2 ${progress * 100}%)`
+          : '#fef2f2',
+        color: progress > 0.5 ? 'white' : '#ef4444',
+        border: `1px solid ${progress > 0 ? `rgba(239,68,68,${0.3 + progress * 0.7})` : '#fecaca'}`,
+      }}
+      title="Hold to delete"
+    >
+      {progress > 0 ? (progress >= 0.8 ? 'Release' : 'Hold...') : 'Delete'}
+    </button>
   );
 }
 

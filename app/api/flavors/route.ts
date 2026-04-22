@@ -3,13 +3,32 @@ import { db } from '@/db';
 import { flavors } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+interface CreateFlavorBody {
+  name: string;
+  unitPrice: number;
+  unitCost?: number | null;
+  isActive?: boolean;
+}
+
+interface UpdateFlavorBody {
+  id: number;
+  name?: string;
+  unitPrice?: number;
+  unitCost?: number | null;
+  isActive?: boolean;
+}
+
+interface DeleteFlavorBody {
+  id: number;
+}
+
 export async function GET() {
   const allFlavors = await db.select().from(flavors);
   return NextResponse.json(allFlavors);
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: CreateFlavorBody = await request.json();
 
   const result = await db.insert(flavors).values({
     name: body.name,
@@ -22,7 +41,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
+  const body: UpdateFlavorBody = await request.json();
   const { id, ...updates } = body;
 
   await db.update(flavors).set(updates).where(eq(flavors.id, id));
@@ -31,7 +50,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
+  const body: DeleteFlavorBody = await request.json();
   const { id } = body;
 
   await db.delete(flavors).where(eq(flavors.id, id));

@@ -3,6 +3,48 @@ import { db } from '@/db';
 import { events, eventItems } from '@/db/schema';
 import { eq, desc, isNull, isNotNull } from 'drizzle-orm';
 
+interface CreateEventBody {
+  name: string;
+  eventDate: string;
+  location?: string | null;
+  eventCost?: number;
+  totalPrepared?: number;
+  totalSold?: number;
+  totalGiveaway?: number;
+  totalRevenue?: number;
+  totalCost?: number;
+  netProfit?: number;
+  cashCollected?: number;
+  venmoCollected?: number;
+  otherCollected?: number;
+  notes?: string | null;
+}
+
+interface UpdateEventBody {
+  id: number;
+  name?: string;
+  eventDate?: string;
+  location?: string | null;
+  eventCost?: number;
+  totalPrepared?: number;
+  totalSold?: number;
+  totalGiveaway?: number;
+  totalRevenue?: number;
+  totalCost?: number;
+  netProfit?: number;
+  cashCollected?: number;
+  venmoCollected?: number;
+  otherCollected?: number;
+  notes?: string | null;
+  recalculate?: boolean;
+  deletedAt?: string | null;
+}
+
+interface DeleteEventBody {
+  id: number;
+  hard?: boolean;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
@@ -29,7 +71,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: CreateEventBody = await request.json();
 
   const result = await db.insert(events).values({
     name: body.name,
@@ -52,17 +94,17 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
+  const body: UpdateEventBody = await request.json();
   const { id, ...updates } = body;
 
   // Recalculate totals if updating event items
   if (updates.recalculate) {
     const items = await db.select().from(eventItems).where(eq(eventItems.eventId, id));
-    updates.totalPrepared = items.reduce((sum, i) => sum + (i.prepared || 0), 0);
-    updates.totalSold = items.reduce((sum, i) => sum + (i.sold || 0), 0);
-    updates.totalGiveaway = items.reduce((sum, i) => sum + (i.giveaway || 0), 0);
-    updates.totalRevenue = items.reduce((sum, i) => sum + (i.revenue || 0), 0);
-    updates.totalCost = items.reduce((sum, i) => sum + (i.cogs || 0), 0);
+    updates.totalPrepared = items.reduce((sum: number, i) => sum + (i.prepared || 0), 0);
+    updates.totalSold = items.reduce((sum: number, i) => sum + (i.sold || 0), 0);
+    updates.totalGiveaway = items.reduce((sum: number, i) => sum + (i.giveaway || 0), 0);
+    updates.totalRevenue = items.reduce((sum: number, i) => sum + (i.revenue || 0), 0);
+    updates.totalCost = items.reduce((sum: number, i) => sum + (i.cogs || 0), 0);
 
     updates.netProfit = updates.totalRevenue - updates.totalCost;
     delete updates.recalculate;
@@ -74,7 +116,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
+  const body: DeleteEventBody = await request.json();
   const { id, hard } = body;
 
   if (hard) {

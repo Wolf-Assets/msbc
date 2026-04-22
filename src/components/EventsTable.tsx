@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react';
 import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate, MapKitCoordinateRegion } from '../types/mapkit.d';
 
 interface Event {
@@ -21,17 +21,17 @@ type SortColumn = 'id' | 'name' | 'eventDate' | 'totalPrepared' | 'totalSold' | 
 
 const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
 
-export default function EventsTable() {
+export default function EventsTable(): React.JSX.Element {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch events (active or archived)
-  const fetchEvents = (archived = false) => {
+  const fetchEvents = (archived: boolean = false): void => {
     setLoading(true);
     const url = archived ? '/api/events?archived=true' : '/api/events';
     fetch(url)
-      .then(res => res.json())
-      .then(data => {
+      .then((res: Response) => res.json() as Promise<Event[]>)
+      .then((data: Event[]) => {
         setEvents(data);
         setLoading(false);
       })
@@ -51,18 +51,18 @@ export default function EventsTable() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error' = 'success'): void => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
   };
 
-  const toggleArchived = () => {
+  const toggleArchived = (): void => {
     const next = !showArchived;
     setShowArchived(next);
     fetchEvents(next);
   };
 
-  const restoreEvent = async (id: number) => {
+  const restoreEvent = async (id: number): Promise<void> => {
     try {
       const response = await fetch('/api/events', {
         method: 'PUT',
@@ -77,16 +77,16 @@ export default function EventsTable() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const handleSort = (column: SortColumn) => {
+  const handleSort = (column: SortColumn): void => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -95,7 +95,7 @@ export default function EventsTable() {
     }
   };
 
-  const addEvent = async () => {
+  const addEvent = async (): Promise<void> => {
     try {
       const response = await fetch('/api/events', {
         method: 'POST',
@@ -114,7 +114,7 @@ export default function EventsTable() {
 
       if (!response.ok) throw new Error('Failed to add');
 
-      const newEvent = await response.json();
+      const newEvent = (await response.json()) as Event;
       // Redirect to the new event's detail page
       window.location.href = `/events/${newEvent.id}`;
     } catch {
@@ -123,7 +123,7 @@ export default function EventsTable() {
   };
 
   // Sort events by selected column
-  const sortedEvents = [...events].sort((a, b) => {
+  const sortedEvents = [...events].sort((a: Event, b: Event): number => {
     let comparison = 0;
 
     if (sortColumn === 'id') {
@@ -133,14 +133,15 @@ export default function EventsTable() {
     } else if (sortColumn === 'eventDate') {
       comparison = new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
     } else {
-      comparison = a[sortColumn] - b[sortColumn];
+      const numericColumn: Exclude<SortColumn, 'id' | 'name' | 'eventDate'> = sortColumn;
+      comparison = a[numericColumn] - b[numericColumn];
     }
 
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
   // Calculate totals
-  const totals = {
+  const totals: Record<'prepared' | 'sold' | 'giveaway' | 'revenue' | 'cost' | 'fee' | 'profit', number> = {
     prepared: events.reduce((sum, e) => sum + e.totalPrepared, 0),
     sold: events.reduce((sum, e) => sum + e.totalSold, 0),
     giveaway: events.reduce((sum, e) => sum + e.totalGiveaway, 0),
@@ -340,7 +341,7 @@ export default function EventsTable() {
                     <td>
                       <span className="px-4 py-3 min-h-[44px] flex items-center justify-center">
                         <button
-                          onClick={(e) => { e.stopPropagation(); restoreEvent(event.id); }}
+                          onClick={(e: ReactMouseEvent<HTMLButtonElement>) => { e.stopPropagation(); restoreEvent(event.id); }}
                           className="text-xs font-medium text-pink-500 hover:text-pink-600"
                         >
                           Restore
@@ -454,7 +455,7 @@ function EventsMapModal({
   onSelectEvent: (event: Event | null) => void;
   formatCurrency: (amount: number) => string;
   formatDate: (date: string) => string;
-}) {
+}): React.JSX.Element {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapKitMap | null>(null);
   const userRegionRef = useRef<MapKitCoordinateRegion | null>(null);
@@ -732,7 +733,7 @@ function EventsMapModal({
 }
 
 // Stat Card Component
-function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }) {
+function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }): React.JSX.Element {
   return (
     <div className={`p-4 rounded-2xl border ${highlight ? 'bg-pink-50 border-pink-100' : 'bg-gray-50 border-gray-100'}`}>
       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{label}</p>
@@ -757,7 +758,7 @@ function SortableHeader({
   direction: 'asc' | 'desc';
   onSort: (column: SortColumn) => void;
   className?: string;
-}) {
+}): React.JSX.Element {
   const isActive = currentColumn === column;
   const isRight = className.includes('text-right');
   const isCenter = className.includes('text-center');

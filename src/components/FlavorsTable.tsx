@@ -1,4 +1,83 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Fragment } from 'react';
+
+function HoldDeleteButton({ onDelete }: { onDelete: () => void }) {
+  const [holding, setHolding] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+  const holdDuration = 800;
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
+
+  const startHold = useCallback(() => {
+    setHolding(true);
+    setReady(false);
+    startTimeRef.current = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Date.now() - startTimeRef.current;
+      const pct = Math.min(elapsed / holdDuration, 1);
+      setProgress(pct);
+      if (pct >= 1) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        setReady(true);
+      }
+    }, 16);
+  }, [holdDuration]);
+
+  const releaseHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    if (ready) {
+      onDelete();
+    }
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, [ready, onDelete]);
+
+  const cancelHold = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = null;
+    setHolding(false);
+    setProgress(0);
+    setReady(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  return (
+    <button
+      onMouseDown={startHold}
+      onMouseUp={releaseHold}
+      onMouseLeave={cancelHold}
+      onTouchStart={startHold}
+      onTouchEnd={releaseHold}
+      className="relative overflow-hidden rounded-full w-16 py-1 text-xs font-medium transition-all select-none text-center"
+      style={{
+        background: holding
+          ? `linear-gradient(90deg, rgba(239,68,68,${0.3 + progress * 0.7}) ${progress * 100}%, #fef2f2 ${progress * 100}%)`
+          : '#fef2f2',
+        color: progress > 0.5 ? 'white' : '#ef4444',
+        border: `1px solid ${progress > 0 ? `rgba(239,68,68,${0.3 + progress * 0.7})` : '#fecaca'}`,
+      }}
+      title="Hold to delete"
+    >
+      {progress > 0 ? (progress >= 0.8 ? 'Release' : 'Hold...') : 'Delete'}
+    </button>
+  );
+}
+
+interface FlavorPrice {
+  id: number;
+  flavorId: number;
+  tierName: string;
+  price: number;
+  cost: number | null;
+}
 
 interface Flavor {
   id: number;
@@ -6,245 +85,6 @@ interface Flavor {
   unitPrice: number;
   unitCost: number | null;
   isActive: boolean;
-}
-
-export default function FlavorsTable() {
-  const [flavors, setFlavors] = useState<Flavor[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [editingCell, setEditingCell] = useState<{ id: number; field: string } | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<number | null>(null);
-  const [newFlavorId, setNewFlavorId] = useState<number | null>(null);
-
-  // Fetch flavors on mount
-  useEffect(() => {
-    fetch('/api/flavors')
-      .then(res => res.json())
-      .then(data => {
-        setFlavors((data as Flavor[]).sort((a, b) => b.id - a.id));
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-        showToast('Failed to load flavors', 'error');
-      });
-  }, []);
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 2500);
-  };
-
-  // Reset pending delete after 3 seconds
-  useEffect(() => {
-    if (pendingDelete) {
-      const timer = setTimeout(() => setPendingDelete(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [pendingDelete]);
-
-  const updateFlavor = async (id: number, field: string, value: string) => {
-    const numValue = field === 'name' ? value : parseFloat(value) || 0;
-
-    // Optimistic update
-    setFlavors((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, [field]: numValue } : f))
-    );
-
-    try {
-      const response = await fetch('/api/flavors', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, [field]: numValue }),
-      });
-
-      if (!response.ok) throw new Error('Failed to update');
-      showToast('Saved');
-    } catch {
-      showToast('Failed to save', 'error');
-      // Refetch on error
-      fetch('/api/flavors').then(res => res.json()).then(setFlavors);
-    }
-  };
-
-  const addFlavor = async () => {
-    try {
-      const response = await fetch('/api/flavors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'New Flavor', unitPrice: 5, unitCost: null }),
-      });
-
-      if (!response.ok) throw new Error('Failed to add');
-
-      const newFlavor = await response.json();
-      setFlavors((prev) => [newFlavor, ...prev]);
-      setNewFlavorId(newFlavor.id);
-      setTimeout(() => setNewFlavorId(null), 3000);
-      showToast('Added new flavor');
-    } catch {
-      showToast('Failed to add flavor', 'error');
-    }
-  };
-
-  const handleDeleteClick = async (id: number) => {
-    // First click: show confirmation state
-    if (pendingDelete !== id) {
-      setPendingDelete(id);
-      return;
-    }
-
-    // Second click: actually delete
-    try {
-      const response = await fetch('/api/flavors', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      });
-
-      if (!response.ok) throw new Error('Failed to delete');
-
-      setFlavors((prev) => prev.filter((f) => f.id !== id));
-      setPendingDelete(null);
-      showToast('Deleted');
-    } catch {
-      showToast('Failed to delete', 'error');
-      setPendingDelete(null);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
-        <div className="flex items-center justify-center py-12">
-          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Floating Card Container */}
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden">
-        {/* Header inside card */}
-        <div className="flex items-center justify-between px-8 pt-8 pb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Flavors</h2>
-            <p className="text-sm text-gray-400 mt-1">Click any cell to edit. Changes save automatically.</p>
-          </div>
-          <button
-            onClick={addFlavor}
-            className="animated-border px-5 py-2.5 text-white rounded-full font-medium text-sm hover:brightness-110 transition-all flex items-center gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Flavor
-          </button>
-        </div>
-
-        {/* Table */}
-        <div className="px-4 pb-4">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th className="w-12 text-center">#</th>
-                <th>Flavor Name</th>
-                <th className="w-28">Unit Price</th>
-                <th className="w-28">Unit Cost</th>
-                <th className="w-24">Margin</th>
-                <th className="w-14"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {flavors.map((flavor, index) => (
-                <tr key={flavor.id} className={`group transition-colors duration-1000 ${newFlavorId === flavor.id ? 'bg-pink-50' : ''}`}>
-                  <td className="text-center">
-                    <span className="text-gray-400 text-sm">{flavors.length - index}</span>
-                  </td>
-                  <td>
-                    <EditableCell
-                      value={flavor.name}
-                      onSave={(value) => updateFlavor(flavor.id, 'name', value)}
-                      isEditing={editingCell?.id === flavor.id && editingCell?.field === 'name'}
-                      onEdit={() => setEditingCell({ id: flavor.id, field: 'name' })}
-                      onBlur={() => setEditingCell(null)}
-                      showPencil
-                    />
-                  </td>
-                  <td>
-                    <EditableCell
-                      value={`$${flavor.unitPrice.toFixed(2)}`}
-                      onSave={(value) => updateFlavor(flavor.id, 'unitPrice', value.replace('$', ''))}
-                      isEditing={editingCell?.id === flavor.id && editingCell?.field === 'unitPrice'}
-                      onEdit={() => setEditingCell({ id: flavor.id, field: 'unitPrice' })}
-                      onBlur={() => setEditingCell(null)}
-                      type="currency"
-                      showPencil
-                    />
-                  </td>
-                  <td>
-                    <EditableCell
-                      value={flavor.unitCost ? `$${flavor.unitCost.toFixed(2)}` : '—'}
-                      onSave={(value) => updateFlavor(flavor.id, 'unitCost', value.replace('$', '').replace('—', ''))}
-                      isEditing={editingCell?.id === flavor.id && editingCell?.field === 'unitCost'}
-                      onEdit={() => setEditingCell({ id: flavor.id, field: 'unitCost' })}
-                      onBlur={() => setEditingCell(null)}
-                      type="currency"
-                      showPencil
-                    />
-                  </td>
-                  <td>
-                    <span className="editable-cell text-sm">
-                      {flavor.unitCost
-                        ? <span className="text-green-600 font-medium">
-                            {(((flavor.unitPrice - flavor.unitCost) / flavor.unitPrice) * 100).toFixed(0)}%
-                          </span>
-                        : <span className="text-gray-300">—</span>
-                      }
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      onClick={() => handleDeleteClick(flavor.id)}
-                      className={`p-2 transition-all min-w-[44px] ${
-                        pendingDelete === flavor.id
-                          ? 'opacity-100 text-red-500 text-xs font-medium'
-                          : 'opacity-100 text-gray-300 hover:text-red-500'
-                      }`}
-                      title={pendingDelete === flavor.id ? 'Click again to confirm' : 'Delete'}
-                    >
-                      {pendingDelete === flavor.id ? (
-                        <span className="animate-pulse">delete</span>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      )}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {flavors.length === 0 && (
-            <div className="text-center py-12 text-gray-400">
-              No flavors yet. Click "Add Flavor" to get started.
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`toast ${toast.type}`}>
-          {toast.message}
-        </div>
-      )}
-    </div>
-  );
 }
 
 interface EditableCellProps {
@@ -255,9 +95,10 @@ interface EditableCellProps {
   onBlur: () => void;
   type?: 'text' | 'currency';
   showPencil?: boolean;
+  className?: string;
 }
 
-function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text', showPencil = false }: EditableCellProps) {
+function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text', showPencil = false, className = '' }: EditableCellProps) {
   const [editValue, setEditValue] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -281,7 +122,7 @@ function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text',
     }
   };
 
-  const handleSave = () => {
+  const handleSave = (): void => {
     if (editValue !== value) {
       onSave(editValue);
     }
@@ -292,12 +133,12 @@ function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text',
     return (
       <input
         ref={inputRef}
-        type={type === 'currency' ? 'text' : 'text'}
+        type="text"
         value={editValue}
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
-        className="editable-cell w-full bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg"
+        className={`editable-cell w-full bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg ${className}`}
       />
     );
   }
@@ -305,7 +146,7 @@ function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text',
   return (
     <div
       onClick={onEdit}
-      className="editable-cell cursor-text group/edit flex items-center gap-1.5"
+      className={`editable-cell cursor-text group/edit flex items-center gap-1.5 ${className}`}
     >
       {showPencil && (
         <svg className="text-gray-300 group-hover/edit:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -313,6 +154,402 @@ function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text',
         </svg>
       )}
       {value}
+    </div>
+  );
+}
+
+export default function FlavorsTable() {
+  const [flavors, setFlavors] = useState<Flavor[]>([]);
+  const [flavorPrices, setFlavorPrices] = useState<FlavorPrice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [editingCell, setEditingCell] = useState<{ id: number; field: string; table: 'flavor' | 'price' } | null>(null);
+  const [newFlavorId, setNewFlavorId] = useState<number | null>(null);
+  const [addingPriceFor, setAddingPriceFor] = useState<number | null>(null);
+  const [newTierName, setNewTierName] = useState('');
+  const [newTierPrice, setNewTierPrice] = useState('');
+  const [newTierCost, setNewTierCost] = useState('');
+  const newTierNameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/flavors').then((r: Response) => r.json() as Promise<Flavor[]>),
+      fetch('/api/flavor-prices').then((r: Response) => r.json() as Promise<FlavorPrice[]>),
+    ])
+      .then(([flavorsData, pricesData]: [Flavor[], FlavorPrice[]]) => {
+        setFlavors(flavorsData.sort((a: Flavor, b: Flavor) => b.id - a.id));
+        setFlavorPrices(pricesData);
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        showToast('Failed to load flavors', 'error');
+      });
+  }, []);
+
+  useEffect(() => {
+    if (addingPriceFor && newTierNameRef.current) {
+      newTierNameRef.current.focus();
+    }
+  }, [addingPriceFor]);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  const getPricesForFlavor = (flavorId: number): FlavorPrice[] =>
+    flavorPrices
+      .filter(p => p.flavorId === flavorId)
+      .sort((a, b) => {
+        if (a.tierName === 'Base') return -1;
+        if (b.tierName === 'Base') return 1;
+        return a.id - b.id;
+      });
+
+  const updateFlavor = async (id: number, field: keyof Flavor, value: string): Promise<void> => {
+    const numValue: string | number | null = field === 'name' ? value : (value === '' || value === '\u2014' ? null : parseFloat(value) || 0);
+    setFlavors(prev => prev.map(f => (f.id === id ? { ...f, [field]: numValue } : f)));
+
+    try {
+      const response = await fetch('/api/flavors', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, [field]: numValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      showToast('Saved');
+    } catch {
+      showToast('Failed to save', 'error');
+      fetch('/api/flavors').then((r: Response) => r.json() as Promise<Flavor[]>).then(setFlavors);
+    }
+  };
+
+  const updateFlavorPrice = async (id: number, field: keyof FlavorPrice, value: string): Promise<void> => {
+    const numValue: string | number | null = field === 'tierName' ? value : (value === '' || value === '\u2014' ? null : parseFloat(value) || 0);
+    setFlavorPrices(prev => prev.map(p => (p.id === id ? { ...p, [field]: numValue } : p)));
+
+    try {
+      const response = await fetch('/api/flavor-prices', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, [field]: numValue }),
+      });
+      if (!response.ok) throw new Error('Failed to update');
+      showToast('Saved');
+    } catch {
+      showToast('Failed to save', 'error');
+      fetch('/api/flavor-prices').then((r: Response) => r.json() as Promise<FlavorPrice[]>).then(setFlavorPrices);
+    }
+  };
+
+  const addFlavor = async (): Promise<void> => {
+    try {
+      const response = await fetch('/api/flavors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'New Flavor', unitPrice: 5, unitCost: null }),
+      });
+      if (!response.ok) throw new Error('Failed to add');
+      const newFlavor: Flavor = await response.json();
+      setFlavors(prev => [newFlavor, ...prev]);
+      setNewFlavorId(newFlavor.id);
+      setTimeout(() => setNewFlavorId(null), 3000);
+      showToast('Added new flavor');
+    } catch {
+      showToast('Failed to add flavor', 'error');
+    }
+  };
+
+  const addPriceTier = async (flavorId: number): Promise<void> => {
+    const tierName = newTierName.trim() || 'New Rate';
+    try {
+      const response = await fetch('/api/flavor-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          flavorId,
+          tierName: tierName,
+          price: parseFloat(newTierPrice) || 0,
+          cost: newTierCost ? parseFloat(newTierCost) : null,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to add');
+      const newPrice: FlavorPrice = await response.json();
+      setFlavorPrices(prev => [...prev, newPrice]);
+      setAddingPriceFor(null);
+      setNewTierName('');
+      setNewTierPrice('');
+      setNewTierCost('');
+      showToast('Added pricing tier');
+    } catch {
+      showToast('Failed to add pricing tier', 'error');
+    }
+  };
+
+  const deleteFlavor = async (id: number): Promise<void> => {
+    try {
+      const response = await fetch('/api/flavors', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) throw new Error('Failed to delete');
+      setFlavors(prev => prev.filter(f => f.id !== id));
+      setFlavorPrices(prev => prev.filter(p => p.flavorId !== id));
+      showToast('Deleted');
+    } catch {
+      showToast('Failed to delete', 'error');
+    }
+  };
+
+  const deletePrice = async (id: number): Promise<void> => {
+    try {
+      const response = await fetch('/api/flavor-prices', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) throw new Error('Failed to delete');
+      setFlavorPrices(prev => prev.filter(p => p.id !== id));
+      showToast('Deleted');
+    } catch {
+      showToast('Failed to delete', 'error');
+    }
+  };
+
+  const formatMargin = (price: number, cost: number | null): React.ReactElement => {
+    if (cost == null || price <= 0) return <span className="text-gray-300">{'\u2014'}</span>;
+    const margin = ((price - cost) / price) * 100;
+    return <span className="text-green-600 font-medium">{margin.toFixed(0)}%</span>;
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
+        <div className="flex items-center justify-center py-12">
+          <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden">
+        <div className="flex items-center justify-between px-8 pt-8 pb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Flavors</h2>
+            <p className="text-sm text-gray-400 mt-1">Click any cell to edit inline.</p>
+          </div>
+          <button
+            onClick={addFlavor}
+            className="animated-border px-5 py-2.5 text-white rounded-full font-medium text-sm hover:brightness-110 transition-all flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Flavor
+          </button>
+        </div>
+
+        <div className="px-4 pb-4">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th className="w-12 text-center">#</th>
+                <th>Name / Tier</th>
+                <th className="w-28">Unit Price</th>
+                <th className="w-28">Unit Cost</th>
+                <th className="w-24">Margin</th>
+                <th className="w-20"></th>
+                <th className="w-20"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {flavors.map((flavor, index) => {
+                const prices = getPricesForFlavor(flavor.id);
+
+                return (
+                  <Fragment key={flavor.id}>
+                    {/* Main flavor row: #, Name, delete */}
+                    <tr className={`group transition-colors duration-1000 ${newFlavorId === flavor.id ? 'bg-pink-50' : ''}`}>
+                      <td className="text-center">
+                        <span className="text-gray-400 text-sm">{flavors.length - index}</span>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <EditableCell
+                            value={flavor.name}
+                            onSave={(value) => updateFlavor(flavor.id, 'name', value)}
+                            isEditing={editingCell?.id === flavor.id && editingCell?.field === 'name' && editingCell?.table === 'flavor'}
+                            onEdit={() => setEditingCell({ id: flavor.id, field: 'name', table: 'flavor' })}
+                            onBlur={() => setEditingCell(null)}
+                            showPencil
+                          />
+                        </div>
+                      </td>
+                      <td></td>
+                      <td></td>
+                      <td></td>
+                      <td>
+                        <button
+                          onClick={() => setAddingPriceFor(addingPriceFor === flavor.id ? null : flavor.id)}
+                          className="rounded-full px-3 py-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 hover:bg-green-100 transition-colors whitespace-nowrap"
+                        >
+                          Add rate
+                        </button>
+                      </td>
+                      <td>
+                        <HoldDeleteButton onDelete={() => deleteFlavor(flavor.id)} />
+                      </td>
+                    </tr>
+
+                    {/* Rate rows — all from flavor_prices, all equal */}
+                    {prices.map(price => (
+                      <tr key={`price-${price.id}`} className="bg-gray-50/50">
+                        <td></td>
+                        <td>
+                          <div className="flex items-center gap-2 pl-6">
+                            <span className="text-gray-300 text-sm">{'\u2514'}</span>
+                            <EditableCell
+                              value={price.tierName}
+                              onSave={(value) => updateFlavorPrice(price.id, 'tierName', value)}
+                              isEditing={editingCell?.id === price.id && editingCell?.field === 'tierName' && editingCell?.table === 'price'}
+                              onEdit={() => setEditingCell({ id: price.id, field: 'tierName', table: 'price' })}
+                              onBlur={() => setEditingCell(null)}
+                              showPencil
+                              className="text-sm text-gray-600"
+                            />
+                          </div>
+                        </td>
+                        <td>
+                          <EditableCell
+                            value={`$${price.price.toFixed(2)}`}
+                            onSave={(value) => updateFlavorPrice(price.id, 'price', value.replace('$', ''))}
+                            isEditing={editingCell?.id === price.id && editingCell?.field === 'price' && editingCell?.table === 'price'}
+                            onEdit={() => setEditingCell({ id: price.id, field: 'price', table: 'price' })}
+                            onBlur={() => setEditingCell(null)}
+                            type="currency"
+                            showPencil
+                            className="text-sm"
+                          />
+                        </td>
+                        <td>
+                          <EditableCell
+                            value={price.cost != null ? `$${price.cost.toFixed(2)}` : '\u2014'}
+                            onSave={(value) => updateFlavorPrice(price.id, 'cost', value.replace('$', '').replace('\u2014', ''))}
+                            isEditing={editingCell?.id === price.id && editingCell?.field === 'cost' && editingCell?.table === 'price'}
+                            onEdit={() => setEditingCell({ id: price.id, field: 'cost', table: 'price' })}
+                            onBlur={() => setEditingCell(null)}
+                            type="currency"
+                            showPencil
+                            className="text-sm"
+                          />
+                        </td>
+                        <td>
+                          <span className="editable-cell text-sm">
+                            {formatMargin(price.price, price.cost)}
+                          </span>
+                        </td>
+                        <td></td>
+                        <td>
+                          <HoldDeleteButton onDelete={() => deletePrice(price.id)} />
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* Add new tier row */}
+                    {addingPriceFor === flavor.id ? (
+                      <tr className="bg-pink-50/30">
+                        <td></td>
+                        <td>
+                          <div className="flex items-center gap-2 pl-6">
+                            <span className="text-gray-300 text-sm">{'\u2514'}</span>
+                            <input
+                              ref={newTierNameRef}
+                              type="text"
+                              placeholder="Tier name..."
+                              value={newTierName}
+                              onChange={e => setNewTierName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') addPriceTier(flavor.id);
+                                if (e.key === 'Escape') { setAddingPriceFor(null); setNewTierName(''); setNewTierPrice(''); setNewTierCost(''); }
+                              }}
+                              className="editable-cell w-full bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg text-sm"
+                            />
+                          </div>
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            placeholder="$0.00"
+                            value={newTierPrice}
+                            onChange={e => setNewTierPrice(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') addPriceTier(flavor.id);
+                              if (e.key === 'Escape') { setAddingPriceFor(null); setNewTierName(''); setNewTierPrice(''); setNewTierCost(''); }
+                            }}
+                            className="editable-cell w-full bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg text-sm"
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            placeholder="$0.00"
+                            value={newTierCost}
+                            onChange={e => setNewTierCost(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') addPriceTier(flavor.id);
+                              if (e.key === 'Escape') { setAddingPriceFor(null); setNewTierName(''); setNewTierPrice(''); setNewTierCost(''); }
+                            }}
+                            className="editable-cell w-full bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg text-sm"
+                          />
+                        </td>
+                        <td></td>
+                        <td>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => addPriceTier(flavor.id)}
+                              className="p-1.5 text-green-500 hover:text-green-600"
+                              title="Save"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => { setAddingPriceFor(null); setNewTierName(''); setNewTierPrice(''); setNewTierCost(''); }}
+                              className="p-1.5 text-gray-400 hover:text-gray-500"
+                              title="Cancel"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {flavors.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              No flavors yet. Click &quot;Add Flavor&quot; to get started.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {toast && (
+        <div className={`toast ${toast.type}`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

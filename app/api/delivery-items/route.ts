@@ -3,6 +3,34 @@ import { db } from '@/db';
 import { deliveryItems, deliveries } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 
+interface CreateDeliveryItemBody {
+  deliveryId: number;
+  flavorName: string;
+  prepared?: number;
+  unitPrice?: number | null;
+  unitCost?: number | null;
+  revenue?: number;
+  cogs?: number;
+  profit?: number;
+}
+
+interface UpdateDeliveryItemBody {
+  id: number;
+  deliveryId?: number;
+  flavorName?: string;
+  prepared?: number;
+  unitPrice?: number | null;
+  unitCost?: number | null;
+  revenue?: number;
+  cogs?: number;
+  profit?: number;
+}
+
+interface DeleteDeliveryItemBody {
+  id: number;
+  deliveryId?: number;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const deliveryId = searchParams.get('deliveryId');
@@ -17,7 +45,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: CreateDeliveryItemBody = await request.json();
 
   const result = await db.insert(deliveryItems).values({
     deliveryId: body.deliveryId,
@@ -36,7 +64,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
+  const body: UpdateDeliveryItemBody = await request.json();
   const { id, deliveryId, ...updates } = body;
 
   await db.update(deliveryItems).set(updates).where(eq(deliveryItems.id, id));
@@ -46,11 +74,11 @@ export async function PUT(request: NextRequest) {
   }
 
   const updated = await db.select().from(deliveryItems).where(eq(deliveryItems.id, id)).get();
-  return NextResponse.json(updated);
+  return NextResponse.json(JSON.parse(JSON.stringify(updated, (_key: string, v: unknown) => typeof v === 'bigint' ? Number(v) : v)));
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
+  const body: DeleteDeliveryItemBody = await request.json();
   const { id, deliveryId } = body;
 
   await db.delete(deliveryItems).where(eq(deliveryItems.id, id));
@@ -65,9 +93,9 @@ export async function DELETE(request: NextRequest) {
 async function recalculateDeliveryTotals(deliveryId: number) {
   const items = await db.select().from(deliveryItems).where(eq(deliveryItems.deliveryId, deliveryId));
 
-  const totalPrepared = items.reduce((sum, i) => sum + (i.prepared || 0), 0);
-  const totalCogs = items.reduce((sum, i) => sum + (i.cogs || 0), 0);
-  const totalRevenue = items.reduce((sum, i) => sum + (i.revenue || 0), 0);
+  const totalPrepared = items.reduce((sum: number, i) => sum + (i.prepared || 0), 0);
+  const totalCogs = items.reduce((sum: number, i) => sum + (i.cogs || 0), 0);
+  const totalRevenue = items.reduce((sum: number, i) => sum + (i.revenue || 0), 0);
   const grossProfit = totalRevenue - totalCogs;
   const profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 

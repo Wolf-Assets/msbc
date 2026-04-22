@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Delivery {
@@ -20,18 +20,18 @@ interface Delivery {
 
 type SortColumn = 'id' | 'storeName' | 'datePrepared' | 'dropoffDate' | 'totalPrepared' | 'totalRevenue' | 'totalCogs' | 'grossProfit';
 
-export default function DeliveriesTable() {
+export default function DeliveriesTable(): React.ReactElement {
   const router = useRouter();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Fetch deliveries (active or archived)
-  const fetchDeliveries = (archived = false) => {
+  const fetchDeliveries = (archived: boolean = false): void => {
     setLoading(true);
     const url = archived ? '/api/deliveries?archived=true' : '/api/deliveries';
     fetch(url)
-      .then(res => res.json())
-      .then(data => {
+      .then((res: Response) => res.json() as Promise<Delivery[]>)
+      .then((data: Delivery[]) => {
         setDeliveries(data);
         setLoading(false);
       })
@@ -47,20 +47,20 @@ export default function DeliveriesTable() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('id');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
-  const [showArchived, setShowArchived] = useState(false);
+  const [showArchived, setShowArchived] = useState<boolean>(false);
 
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error' = 'success'): void => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2500);
   };
 
-  const toggleArchived = () => {
+  const toggleArchived = (): void => {
     const next = !showArchived;
     setShowArchived(next);
     fetchDeliveries(next);
   };
 
-  const restoreDelivery = async (id: number) => {
+  const restoreDelivery = async (id: number): Promise<void> => {
     try {
       const response = await fetch('/api/deliveries', {
         method: 'PUT',
@@ -75,16 +75,16 @@ export default function DeliveriesTable() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string): string => {
     const date = new Date(dateString + 'T00:00:00');
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
 
-  const handleSort = (column: SortColumn) => {
+  const handleSort = (column: SortColumn): void => {
     if (sortColumn === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -93,7 +93,7 @@ export default function DeliveriesTable() {
     }
   };
 
-  const addDelivery = async () => {
+  const addDelivery = async (): Promise<void> => {
     try {
       const response = await fetch('/api/deliveries', {
         method: 'POST',
@@ -106,7 +106,7 @@ export default function DeliveriesTable() {
 
       if (!response.ok) throw new Error('Failed to add');
 
-      const newDelivery = await response.json();
+      const newDelivery: Delivery = await (response.json() as Promise<Delivery>);
       // Redirect to the new delivery's detail page
       router.push(`/deliveries/${newDelivery.id}`);
     } catch {
@@ -129,7 +129,7 @@ export default function DeliveriesTable() {
       const bDate = b.dropoffDate ? new Date(b.dropoffDate).getTime() : 0;
       comparison = aDate - bDate;
     } else {
-      comparison = a[sortColumn] - b[sortColumn];
+      comparison = (a[sortColumn] as number) - (b[sortColumn] as number);
     }
 
     return sortDirection === 'asc' ? comparison : -comparison;
@@ -310,7 +310,7 @@ export default function DeliveriesTable() {
                     <td>
                       <span className="px-4 py-3 min-h-[44px] flex items-center justify-center">
                         <button
-                          onClick={(e) => { e.stopPropagation(); restoreDelivery(delivery.id); }}
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); restoreDelivery(delivery.id); }}
                           className="text-xs font-medium text-pink-500 hover:text-pink-600"
                         >
                           Restore
@@ -383,7 +383,14 @@ export default function DeliveriesTable() {
 }
 
 // Stat Card Component
-function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }) {
+interface StatCardProps {
+  label: string;
+  value: string;
+  sublabel?: string;
+  highlight?: boolean;
+}
+
+function StatCard({ label, value, sublabel, highlight }: StatCardProps): React.ReactElement {
   return (
     <div className={`p-4 rounded-2xl border ${highlight ? 'bg-pink-50 border-pink-100' : 'bg-gray-50 border-gray-100'}`}>
       <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{label}</p>
@@ -394,6 +401,15 @@ function StatCard({ label, value, sublabel, highlight }: { label: string; value:
 }
 
 // Sortable Header Component
+interface SortableHeaderProps {
+  label: string;
+  column: SortColumn;
+  currentColumn: SortColumn;
+  direction: 'asc' | 'desc';
+  onSort: (column: SortColumn) => void;
+  className?: string;
+}
+
 function SortableHeader({
   label,
   column,
@@ -401,14 +417,7 @@ function SortableHeader({
   direction,
   onSort,
   className = '',
-}: {
-  label: string;
-  column: SortColumn;
-  currentColumn: SortColumn;
-  direction: 'asc' | 'desc';
-  onSort: (column: SortColumn) => void;
-  className?: string;
-}) {
+}: SortableHeaderProps): React.ReactElement {
   const isActive = currentColumn === column;
   const isRight = className.includes('text-right');
   const isCenter = className.includes('text-center');

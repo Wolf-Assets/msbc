@@ -210,6 +210,34 @@ export async function initializeDb(): Promise<void> {
     // ignore
   }
 
+  // Flavor pricing tiers
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS flavor_prices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      flavor_id INTEGER NOT NULL,
+      tier_name TEXT NOT NULL,
+      price REAL NOT NULL,
+      cost REAL,
+      FOREIGN KEY (flavor_id) REFERENCES flavors(id) ON DELETE CASCADE
+    )
+  `);
+
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_flavor_prices_flavor_id ON flavor_prices(flavor_id)
+  `);
+
+  // Add rate_id column to event_items and delivery_items
+  try {
+    await client.execute(`ALTER TABLE event_items ADD COLUMN rate_id INTEGER`);
+  } catch {
+    // Column already exists
+  }
+  try {
+    await client.execute(`ALTER TABLE delivery_items ADD COLUMN rate_id INTEGER`);
+  } catch {
+    // Column already exists
+  }
+
   // Check if we have flavors data
   const flavorCountResult = await client.execute('SELECT COUNT(*) as count FROM flavors');
   const flavorCount = (flavorCountResult.rows[0] as unknown as CountResult).count;

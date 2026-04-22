@@ -7,7 +7,7 @@ import './globals.css';
 import { NavLink } from './NavLink';
 
 export const metadata: Metadata = {
-  title: 'Mighty Sweets Baking Co.',
+  title: 'Mighty Sweet Baking Co.',
   description: 'Inventory Manager',
 };
 
@@ -28,11 +28,11 @@ export default function RootLayout({
             <a href="/" className="flex items-center gap-4 hover:opacity-80 transition-opacity">
               <img
                 src="https://mightysweetbakingco.com/wp-content/uploads/2025/07/logo-1.png"
-                alt="Mighty Sweets Baking Co."
+                alt="Mighty Sweet Baking Co."
                 className="h-12 w-auto"
               />
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Mighty Sweets Baking Co.</h1>
+                <h1 className="text-xl font-bold text-gray-900">Mighty Sweet Baking Co.</h1>
                 <p className="text-xs text-pink-500 font-medium">Inventory Manager</p>
               </div>
             </a>

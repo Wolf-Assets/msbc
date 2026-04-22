@@ -3,6 +3,38 @@ import { db } from '@/db';
 import { deliveries, deliveryItems } from '@/db/schema';
 import { eq, desc, isNull, isNotNull } from 'drizzle-orm';
 
+interface CreateDeliveryBody {
+  storeName: string;
+  datePrepared: string;
+  dropoffDate?: string | null;
+  totalPrepared?: number;
+  totalCogs?: number;
+  totalRevenue?: number;
+  grossProfit?: number;
+  profitMargin?: number;
+  notes?: string | null;
+}
+
+interface UpdateDeliveryBody {
+  id: number;
+  storeName?: string;
+  datePrepared?: string;
+  dropoffDate?: string | null;
+  expirationDate?: string | null;
+  totalPrepared?: number;
+  totalCogs?: number;
+  totalRevenue?: number;
+  grossProfit?: number;
+  profitMargin?: number;
+  notes?: string | null;
+  deletedAt?: string | null;
+}
+
+interface DeleteDeliveryBody {
+  id: number;
+  hard?: boolean;
+}
+
 function calculateExpirationDate(datePrepared: string): string {
   const date = new Date(datePrepared + 'T00:00:00');
   date.setDate(date.getDate() + 7);
@@ -34,7 +66,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  const body: CreateDeliveryBody = await request.json();
 
   const expirationDate = body.datePrepared ? calculateExpirationDate(body.datePrepared) : null;
 
@@ -55,7 +87,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const body = await request.json();
+  const body: UpdateDeliveryBody = await request.json();
   const { id, ...updates } = body;
 
   // Recalculate expiration date if datePrepared changed
@@ -69,7 +101,7 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const body = await request.json();
+  const body: DeleteDeliveryBody = await request.json();
   const { id, hard } = body;
 
   if (hard) {
