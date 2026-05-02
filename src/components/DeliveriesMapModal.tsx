@@ -9,10 +9,14 @@ interface Delivery {
   location: string | null;
   datePrepared: string;
   dropoffDate: string | null;
+  expirationDate: string | null;
   totalPrepared: number;
   totalCogs: number;
   totalRevenue: number;
   grossProfit: number;
+  profitMargin: number;
+  notes: string | null;
+  deletedAt?: string | null;
 }
 
 const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
@@ -104,8 +108,6 @@ export default function DeliveriesMapModal({
             color: '#ec4899',
             glyphColor: '#ffffff',
           });
-
-          (marker as MapKitAnnotation & { data: { deliveryId: number } }).data = { deliveryId: delivery.id };
 
           marker.addEventListener('select', () => {
             const clicked = deliveries.find(d => d.id === delivery.id);

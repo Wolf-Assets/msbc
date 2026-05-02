@@ -5,7 +5,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 interface Delivery {
   id: number;
   storeName: string;
+  location: string | null;
   datePrepared: string;
+  dropoffDate: string | null;
+  expirationDate: string | null;
+  totalPrepared: number;
+  totalCogs: number;
+  totalRevenue: number;
+  grossProfit: number;
+  profitMargin: number;
+  notes: string | null;
   deletedAt?: string | null;
 }
 
