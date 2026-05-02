@@ -86,9 +86,13 @@ interface CustomTooltipProps {
 
 const CHART_PINK = '#ec4899';
 
+interface FlavorItem { flavorName: string; prepared: number | null }
+
 export default function Dashboard() {
   const [events, setEvents] = useState<Event[]>([]);
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
+  const [eventItems, setEventItems] = useState<FlavorItem[]>([]);
+  const [deliveryItems, setDeliveryItems] = useState<FlavorItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [revenueView, setRevenueView] = useState<'monthly' | 'daily'>('monthly');
   const [eventsAgg, setEventsAgg] = useState<'total' | 'average'>('total');
@@ -96,22 +100,37 @@ export default function Dashboard() {
   const [storesAgg, setStoresAgg] = useState<'total' | 'average'>('total');
   const [storesMetric, setStoresMetric] = useState<'revenue' | 'profit'>('revenue');
 
-  // Fetch events and deliveries on mount
+  // Fetch events, deliveries, and items on mount
   useEffect(() => {
     Promise.all([
       fetch('/api/events').then((res: Response) => res.json() as Promise<Event[]>),
       fetch('/api/deliveries').then((res: Response) => res.json() as Promise<Delivery[]>),
+      fetch('/api/event-items').then((res: Response) => res.json() as Promise<FlavorItem[]>),
+      fetch('/api/delivery-items').then((res: Response) => res.json() as Promise<FlavorItem[]>),
     ])
-      .then(([eventsData, deliveriesData]: [Event[], Delivery[]]) => {
+      .then(([eventsData, deliveriesData, eventItemsData, deliveryItemsData]: [Event[], Delivery[], FlavorItem[], FlavorItem[]]) => {
         setEvents(eventsData);
         // Filter out archived deliveries
         setDeliveries(deliveriesData.filter((d: Delivery) => !d.deletedAt));
+        setEventItems(eventItemsData || []);
+        setDeliveryItems(deliveryItemsData || []);
         setLoading(false);
       })
       .catch(() => {
         setLoading(false);
       });
   }, []);
+
+  // Total cookies made: batch flavors count as 15, everything else as 1
+  const totalCookiesMade = (() => {
+    const all = [...eventItems, ...deliveryItems];
+    let sum = 0;
+    for (const it of all) {
+      const isBatch = it.flavorName.toLowerCase().includes('batch');
+      sum += (it.prepared ?? 0) * (isBatch ? 15 : 1);
+    }
+    return sum;
+  })();
 
   if (loading) {
     return (
@@ -306,8 +325,8 @@ export default function Dashboard() {
   const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-100 text-sm">
-          <p className="font-medium text-gray-900 mb-1">{label}</p>
+        <div className="bg-white dark:bg-[#0a0a0a] px-3 py-2 rounded-lg shadow-lg border border-gray-100 dark:border-[#1f1f1f] text-sm">
+          <p className="font-medium text-gray-900 dark:text-zinc-100 mb-1">{label}</p>
           {payload.map((entry, index) => (
             <p key={index} style={{ color: entry.color }} className="text-sm">
               {entry.name}: {entry.name === 'Margin' || entry.name === 'margin'
@@ -325,8 +344,8 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <p className="text-sm text-gray-400 mt-1">Overview of your business performance</p>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 leading-tight">Hi Mary, Welcome to Your Dashboard</h2>
+        <p className="text-base text-gray-700 dark:text-zinc-300">Overview of Your Business Performance</p>
       </div>
 
       {/* Bento Grid */}
@@ -336,11 +355,11 @@ export default function Dashboard() {
       <div className="grid grid-cols-12 gap-4" style={{ height: '120px' }}>
 
         {/* Total Revenue */}
-        <div className="col-span-6 row-span-1 bg-gradient-to-br from-pink-500 to-pink-600 rounded-3xl p-5 text-white flex items-center justify-between">
+        <div className="col-span-5 row-span-1 bg-gradient-to-br from-pink-500 to-pink-600 rounded-3xl p-5 text-white flex items-center justify-between">
           <div>
             <p className="text-pink-100 text-sm font-medium uppercase tracking-wide">Total Revenue</p>
             <p className="text-3xl font-bold mt-1">{formatCurrency(totalRevenue)}</p>
-            <p className="text-pink-200 text-sm font-medium mt-1">From {eventsWithSales.length} events and {deliveriesWithRevenue.length} deliveries</p>
+            <p className="text-pink-200 text-base font-medium mt-1">From {eventsWithSales.length} events and {deliveriesWithRevenue.length} deliveries</p>
           </div>
           <div className="text-right">
             <p className="text-xl font-bold">{formatCurrency(totalRevenue / (totalSources || 1))}</p>
@@ -349,17 +368,24 @@ export default function Dashboard() {
         </div>
 
         {/* Total Profit */}
-        <div className="col-span-3 row-span-1 bg-green-50 border border-green-100 rounded-3xl p-4 flex flex-col justify-center">
-          <p className="text-sm text-green-600 font-medium uppercase tracking-wide">Total Profit</p>
-          <p className="text-3xl font-bold text-green-600 mt-1">{formatCurrency(totalProfit)}</p>
-          <p className="text-sm font-medium text-green-500 mt-1">{formatCurrency(totalProfit / (totalSources || 1))} avg</p>
+        <div className="col-span-3 row-span-1 bg-green-50 dark:bg-green-950/40 border border-green-100 dark:border-green-900/50 rounded-3xl p-4 flex flex-col justify-center">
+          <p className="text-sm text-green-600 dark:text-green-400 font-medium uppercase tracking-wide">Total Profit</p>
+          <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">{formatCurrency(totalProfit)}</p>
+          <p className="text-base font-medium text-green-500 dark:text-green-400 mt-1">{formatCurrency(totalProfit / (totalSources || 1))} avg</p>
         </div>
 
         {/* Profit Margin */}
-        <div className="col-span-3 row-span-1 bg-[#fafafc] border border-gray-100 rounded-3xl p-4 flex flex-col justify-center">
-          <p className="text-sm text-gray-400 font-medium uppercase tracking-wide">Profit Margin</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{profitMargin.toFixed(1)}%</p>
-          <p className="text-sm font-medium text-gray-400 mt-1">overall</p>
+        <div className="col-span-2 row-span-1 bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl p-4 flex flex-col justify-center">
+          <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide">Profit Margin</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-zinc-100 mt-1">{profitMargin.toFixed(1)}%</p>
+          <p className="text-base font-medium text-gray-400 dark:text-zinc-500 mt-1">overall</p>
+        </div>
+
+        {/* Cookies Made */}
+        <div className="col-span-2 row-span-1 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 rounded-3xl p-4 flex flex-col justify-center">
+          <p className="text-sm text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wide">Cookies Made</p>
+          <p className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{totalCookiesMade.toLocaleString()}</p>
+          <p className="text-base font-medium text-blue-500 dark:text-blue-400 mt-1">all-time</p>
         </div>
       </div>
 
@@ -367,18 +393,18 @@ export default function Dashboard() {
       <div className="flex gap-4" style={{ height: '280px' }}>
 
         {/* Revenue Chart - Monthly / By Day toggle */}
-        <div className="bg-[#fafafc] border border-gray-100 rounded-3xl p-5" style={{ width: '40%' }}>
+        <div className="bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl p-5" style={{ width: '40%' }}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-400 font-medium uppercase tracking-wide">
+            <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide">
               {revenueView === 'monthly' ? 'Monthly Revenue & Profit' : 'Daily Revenue & Profit'}
             </p>
-            <div className="flex bg-gray-100 rounded-lg p-0.5">
+            <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-lg p-0.5">
               <button
                 onClick={() => setRevenueView('monthly')}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
                   revenueView === 'monthly'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                    : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                 }`}
               >
                 Monthly
@@ -387,8 +413,8 @@ export default function Dashboard() {
                 onClick={() => setRevenueView('daily')}
                 className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
                   revenueView === 'daily'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-400 hover:text-gray-600'
+                    ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                    : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                 }`}
               >
                 By Day
@@ -404,9 +430,9 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor={CHART_PINK} stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} interval={0} />
-                <YAxis tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} interval={0} />
+                <YAxis tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
                 <Tooltip content={<CustomTooltip />} />
                 <Area type="monotone" dataKey="revenue" stroke={CHART_PINK} strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" name="Revenue" />
                 <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e', r: 3 }} name="Profit" />
@@ -415,10 +441,10 @@ export default function Dashboard() {
           ) : (
             <ResponsiveContainer width="100%" height={220} minWidth={100}>
               <BarChart data={revenueByDay} margin={{ left: -20, right: -20 }} barCategoryGap="20%">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="day" xAxisId="revenue" tick={{ fontSize: 11, fill: '#374151' }} axisLine={false} tickLine={false} allowDuplicatedCategory={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
+                <XAxis dataKey="day" xAxisId="revenue" tick={{ fontSize: 11, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} allowDuplicatedCategory={false} />
                 <XAxis dataKey="day" xAxisId="profit" hide height={0} />
-                <YAxis tick={{ fontSize: 10, fill: '#374151' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
+                <YAxis tick={{ fontSize: 10, fill: 'var(--fg-muted)' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} type="number" scale="linear" />
                 <Tooltip
                   formatter={(value: number | string | undefined, name: string | undefined) => [
                     formatCurrency(value as number),
@@ -438,17 +464,17 @@ export default function Dashboard() {
         </div>
 
         {/* Top Events */}
-        <div className="bg-[#fafafc] border border-gray-100 rounded-3xl p-5 flex flex-col" style={{ width: '30%' }}>
+        <div className="bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl p-5 flex flex-col" style={{ width: '30%' }}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-400 font-medium uppercase tracking-wide">Top Events</p>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide">Top Events</p>
             <div className="flex gap-1">
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-lg p-0.5">
                 <button
                   onClick={() => setEventsAgg('total')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     eventsAgg === 'total'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Total
@@ -457,20 +483,20 @@ export default function Dashboard() {
                   onClick={() => setEventsAgg('average')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     eventsAgg === 'average'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Average
                 </button>
               </div>
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-lg p-0.5">
                 <button
                   onClick={() => setEventsMetric('revenue')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     eventsMetric === 'revenue'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Revenue
@@ -479,8 +505,8 @@ export default function Dashboard() {
                   onClick={() => setEventsMetric('profit')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     eventsMetric === 'profit'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Profit
@@ -493,13 +519,13 @@ export default function Dashboard() {
               <div key={event.name} className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    index === 0 ? (eventsMetric === 'profit' ? 'bg-green-500 text-white' : 'bg-pink-500 text-white') : 'bg-gray-100 text-gray-500'
+                    index === 0 ? (eventsMetric === 'profit' ? 'bg-green-500 text-white' : 'bg-pink-500 text-white') : 'bg-gray-100 text-gray-500 dark:bg-[#1f1f1f] dark:text-zinc-400'
                   }`}>
                     {index + 1}
                   </span>
-                  <span className="text-[15px] text-gray-700 truncate max-w-[200px]" title={event.name}>{event.name}</span>
+                  <span className="text-[15px] text-gray-700 dark:text-zinc-300 truncate max-w-[200px]" title={event.name}>{event.name}</span>
                 </div>
-                <span className={`text-[15px] font-medium ${eventsMetric === 'profit' ? 'text-green-600' : 'text-pink-600'}`}>
+                <span className={`text-[15px] font-medium ${eventsMetric === 'profit' ? 'text-green-600 dark:text-green-400' : 'text-pink-600 dark:text-pink-400'}`}>
                   {formatCurrency(getEventValue(event))}
                 </span>
               </div>
@@ -509,17 +535,17 @@ export default function Dashboard() {
 
 
         {/* Top Stores */}
-        <div className="bg-[#fafafc] border border-gray-100 rounded-3xl p-5 flex flex-col" style={{ width: '30%' }}>
+        <div className="bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl p-5 flex flex-col" style={{ width: '30%' }}>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-gray-400 font-medium uppercase tracking-wide">Top Stores</p>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide">Top Stores</p>
             <div className="flex gap-1">
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-lg p-0.5">
                 <button
                   onClick={() => setStoresAgg('total')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     storesAgg === 'total'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Total
@@ -528,20 +554,20 @@ export default function Dashboard() {
                   onClick={() => setStoresAgg('average')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     storesAgg === 'average'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Average
                 </button>
               </div>
-              <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-lg p-0.5">
                 <button
                   onClick={() => setStoresMetric('revenue')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     storesMetric === 'revenue'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Revenue
@@ -550,8 +576,8 @@ export default function Dashboard() {
                   onClick={() => setStoresMetric('profit')}
                   className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     storesMetric === 'profit'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600'
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-[#0a0a0a] dark:text-zinc-100'
+                      : 'text-gray-400 hover:text-gray-600 dark:text-zinc-500 dark:hover:text-zinc-400'
                   }`}
                 >
                   Profit
@@ -565,20 +591,20 @@ export default function Dashboard() {
                 <div key={store.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      index === 0 ? (storesMetric === 'profit' ? 'bg-green-500 text-white' : 'bg-pink-500 text-white') : 'bg-gray-100 text-gray-500'
+                      index === 0 ? (storesMetric === 'profit' ? 'bg-green-500 text-white' : 'bg-pink-500 text-white') : 'bg-gray-100 text-gray-500 dark:bg-[#1f1f1f] dark:text-zinc-400'
                     }`}>
                       {index + 1}
                     </span>
-                    <span className="text-[15px] text-gray-700 truncate max-w-[200px]" title={store.name}>{store.name}</span>
+                    <span className="text-[15px] text-gray-700 dark:text-zinc-300 truncate max-w-[200px]" title={store.name}>{store.name}</span>
                   </div>
-                  <span className={`text-[15px] font-medium ${storesMetric === 'profit' ? 'text-green-600' : 'text-pink-600'}`}>
+                  <span className={`text-[15px] font-medium ${storesMetric === 'profit' ? 'text-green-600 dark:text-green-400' : 'text-pink-600 dark:text-pink-400'}`}>
                     {formatCurrency(getStoreValue(store))}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 text-center mt-8">No store data yet</p>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 text-center mt-8">No store data yet</p>
           )}
         </div>
 
@@ -587,11 +613,11 @@ export default function Dashboard() {
       {/* Row 3 - Profit Margins */}
       <div className="flex gap-4" style={{ height: '320px' }}>
         {/* Profit Margin by Event - Line Chart */}
-        <div className="bg-[#fafafc] border border-gray-100 rounded-3xl px-5 pt-4 pb-2" style={{ width: '50%' }}>
-          <p className="text-sm text-gray-400 font-medium uppercase tracking-wide mb-1">Profit Margin by Event</p>
+        <div className="bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl px-5 pt-4 pb-2" style={{ width: '50%' }}>
+          <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide mb-1">Profit Margin by Event</p>
           <ResponsiveContainer width="100%" height={270} minWidth={100}>
             <LineChart data={marginByEvent} margin={{ top: 10, left: -10, right: 25 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
               <XAxis
                 dataKey="name"
                 tick={(props) => {
@@ -609,7 +635,7 @@ export default function Dashboard() {
                   }
                   if (currentLine.trim()) lines.push(currentLine.trim());
                   return (
-                    <text x={x} y={y} textAnchor="middle" fill="#374151" fontSize={11}>
+                    <text x={x} y={y} textAnchor="middle" fill="var(--fg-muted)" fontSize={11}>
                       {lines.map((line, i) => (
                         <tspan key={i} x={x} dy={i === 0 ? 14 : 13}>
                           {line}
@@ -624,7 +650,7 @@ export default function Dashboard() {
                 height={70}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#374151' }}
+                tick={{ fontSize: 10, fill: 'var(--fg-muted)' }}
                 axisLine={false}
                 tickLine={false}
                 domain={[minMargin, maxMargin]}
@@ -655,11 +681,11 @@ export default function Dashboard() {
         </div>
 
         {/* Profit Margin by Store - Line Chart */}
-        <div className="bg-[#fafafc] border border-gray-100 rounded-3xl px-5 pt-4 pb-2" style={{ width: '50%' }}>
-          <p className="text-sm text-gray-400 font-medium uppercase tracking-wide mb-1">Profit Margin by Store</p>
+        <div className="bg-[#fafafc] dark:bg-[#0a0a0a] border border-gray-100 dark:border-[#1f1f1f] rounded-3xl px-5 pt-4 pb-2" style={{ width: '50%' }}>
+          <p className="text-sm text-gray-400 dark:text-zinc-500 font-medium uppercase tracking-wide mb-1">Profit Margin by Store</p>
           <ResponsiveContainer width="100%" height={270} minWidth={100}>
             <LineChart data={marginByStore} margin={{ top: 10, left: -10, right: 25 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(120,120,120,0.15)" />
               <XAxis
                 dataKey="name"
                 tick={(props) => {
@@ -677,7 +703,7 @@ export default function Dashboard() {
                   }
                   if (currentLine.trim()) lines.push(currentLine.trim());
                   return (
-                    <text x={x} y={y} textAnchor="middle" fill="#374151" fontSize={11}>
+                    <text x={x} y={y} textAnchor="middle" fill="var(--fg-muted)" fontSize={11}>
                       {lines.map((line, i) => (
                         <tspan key={i} x={x} dy={i === 0 ? 14 : 13}>
                           {line}
@@ -692,7 +718,7 @@ export default function Dashboard() {
                 height={70}
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#374151' }}
+                tick={{ fontSize: 10, fill: 'var(--fg-muted)' }}
                 axisLine={false}
                 tickLine={false}
                 domain={[minMargin, maxMargin]}

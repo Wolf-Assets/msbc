@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { deliveryItems, deliveries } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { logAudit, diffFields } from '@/db/audit';
 
 interface CreateDeliveryItemBody {
   deliveryId: number;
@@ -31,6 +32,18 @@ interface DeleteDeliveryItemBody {
   deliveryId?: number;
 }
 
+async function buildDeliveryItemLabel(deliveryId: number | null | undefined, flavorName: string): Promise<string> {
+  if (deliveryId) {
+    try {
+      const d = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId)).get();
+      if (d?.storeName) return `${d.storeName} — ${flavorName}`;
+    } catch {
+      // ignore
+    }
+  }
+  return flavorName;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const deliveryId = searchParams.get('deliveryId');
@@ -58,14 +71,26 @@ export async function POST(request: NextRequest) {
     profit: body.profit || 0,
   }).returning();
 
+  const newRow = result[0];
+  const label = await buildDeliveryItemLabel(newRow.deliveryId, newRow.flavorName);
+  await logAudit({
+    action: 'create',
+    entityType: 'delivery_item',
+    entityId: newRow.id,
+    entityLabel: label,
+    after: { ...newRow },
+  });
+
   await recalculateDeliveryTotals(body.deliveryId);
 
-  return NextResponse.json(result[0]);
+  return NextResponse.json(newRow);
 }
 
 export async function PUT(request: NextRequest) {
   const body: UpdateDeliveryItemBody = await request.json();
   const { id, deliveryId, ...updates } = body;
+
+  const before = await db.select().from(deliveryItems).where(eq(deliveryItems.id, id)).get();
 
   await db.update(deliveryItems).set(updates).where(eq(deliveryItems.id, id));
 
@@ -74,6 +99,20 @@ export async function PUT(request: NextRequest) {
   }
 
   const updated = await db.select().from(deliveryItems).where(eq(deliveryItems.id, id)).get();
+
+  if (before && updated) {
+    const label = await buildDeliveryItemLabel(updated.deliveryId, updated.flavorName);
+    await logAudit({
+      action: 'update',
+      entityType: 'delivery_item',
+      entityId: id,
+      entityLabel: label,
+      changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+      before: { ...before },
+      after: { ...updated },
+    });
+  }
+
   return NextResponse.json(JSON.parse(JSON.stringify(updated, (_key: string, v: unknown) => typeof v === 'bigint' ? Number(v) : v)));
 }
 
@@ -81,7 +120,20 @@ export async function DELETE(request: NextRequest) {
   const body: DeleteDeliveryItemBody = await request.json();
   const { id, deliveryId } = body;
 
+  const before = await db.select().from(deliveryItems).where(eq(deliveryItems.id, id)).get();
+
   await db.delete(deliveryItems).where(eq(deliveryItems.id, id));
+
+  if (before) {
+    const label = await buildDeliveryItemLabel(before.deliveryId, before.flavorName);
+    await logAudit({
+      action: 'delete',
+      entityType: 'delivery_item',
+      entityId: id,
+      entityLabel: label,
+      before: { ...before },
+    });
+  }
 
   if (deliveryId) {
     await recalculateDeliveryTotals(deliveryId);

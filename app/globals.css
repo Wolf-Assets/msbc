@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @source "../src/**/*.{ts,tsx}";
 @source "./**/*.{ts,tsx}";
@@ -6,6 +7,40 @@
 @theme {
   --font-sans: 'Bricolage Grotesque', system-ui, sans-serif;
   --color-cream: #fffbf7;
+}
+
+/* Vercel-style theme tokens */
+:root {
+  --bg: #ffffff;
+  --bg-card: #fafafc;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f4f4f5;
+  --border: #e5e5e5;
+  --border-subtle: #f3f4f6;
+  --fg: #1a1a1a;
+  --fg-muted: #6b7280;
+  --fg-subtle: #9ca3af;
+
+  /* Font selection: defaults to Bricolage */
+  --app-font: 'Bricolage Grotesque', system-ui, sans-serif;
+  --app-letter-spacing: 0;
+}
+
+html.font-geist-tight {
+  --app-font: var(--font-geist-sans, 'Geist'), system-ui, sans-serif;
+  --app-letter-spacing: -0.03em;
+}
+
+.dark {
+  --bg: #000000;
+  --bg-card: #0a0a0a;
+  --bg-elevated: #111111;
+  --bg-subtle: #171717;
+  --border: #262626;
+  --border-subtle: #1f1f1f;
+  --fg: #ededed;
+  --fg-muted: #a1a1a1;
+  --fg-subtle: #6b7280;
 }
 
 @layer base {
@@ -16,21 +51,30 @@
   }
 
   html {
-    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-family: var(--app-font);
+    letter-spacing: var(--app-letter-spacing);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: var(--bg);
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
   }
 
   body {
-    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
-    background-color: #ffffff;
-    color: #1a1a1a;
+    font-family: var(--app-font);
+    letter-spacing: var(--app-letter-spacing);
+    background-color: var(--bg);
+    color: var(--fg);
     min-height: 100vh;
     line-height: 1.6;
   }
 
   h1, h2, h3, h4, h5, h6, p, span, div, a, button, input, label {
-    font-family: 'Bricolage Grotesque', system-ui, sans-serif;
+    font-family: var(--app-font);
+    letter-spacing: var(--app-letter-spacing);
   }
 }
 
@@ -51,10 +95,18 @@
     background-color: #f9fafb;
   }
 
+  .dark .editable-cell:hover {
+    background-color: #171717;
+  }
+
   .editable-cell:focus {
     outline: none;
     background-color: #fff;
     box-shadow: 0 0 0 2px #ec4899;
+  }
+
+  .dark .editable-cell:focus {
+    background-color: #0a0a0a;
   }
 
   /* Table styles */
@@ -77,10 +129,19 @@
     background-color: transparent;
   }
 
+  .dark .data-table th {
+    color: #71717a;
+    border-bottom-color: #1f1f1f;
+  }
+
   .data-table td {
     padding: 0;
     border-bottom: 1px solid #f3f4f6;
     vertical-align: middle;
+  }
+
+  .dark .data-table td {
+    border-bottom-color: #1f1f1f;
   }
 
   .data-table tr:last-child td {
@@ -93,6 +154,10 @@
 
   .data-table tbody tr:hover {
     background-color: #fafafa;
+  }
+
+  .dark .data-table tbody tr:hover {
+    background-color: #141414;
   }
 
   /* Button styles with Apple-inspired animations */
@@ -125,12 +190,20 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   }
 
+  .dark .toast {
+    background: #fafafa;
+    color: #0a0a0a;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  }
+
   .toast.success {
     background: #10b981;
+    color: white;
   }
 
   .toast.error {
     background: #ef4444;
+    color: white;
   }
 
   /* DayPicker customization */
@@ -140,16 +213,34 @@
     font-family: 'Bricolage Grotesque', system-ui, sans-serif;
   }
 
+  .rdp-months {
+    display: flex !important;
+    flex-flow: row nowrap !important;
+    gap: 1.5rem !important;
+  }
+
   .rdp-month_caption {
     font-weight: 600;
     font-size: 15px;
     color: #1a1a1a;
   }
 
+  .dark .rdp-month_caption {
+    color: #ededed;
+  }
+
   .rdp-weekday {
     color: #9ca3af;
     font-size: 12px;
     font-weight: 500;
+  }
+
+  .dark .rdp-weekday {
+    color: #71717a;
+  }
+
+  .dark .rdp-day {
+    color: #d4d4d8;
   }
 
   .rdp-day {
@@ -160,6 +251,11 @@
   .rdp-day:hover:not(.rdp-day_selected) {
     background-color: #fce7f3;
     color: #ec4899;
+  }
+
+  .dark .rdp-day:hover:not(.rdp-day_selected) {
+    background-color: #831843;
+    color: #fbcfe8;
   }
 
   .rdp-day_selected {
@@ -175,11 +271,21 @@
     background: white;
   }
 
+  .dark .notes-editor .quill {
+    border-color: #262626;
+    background: #0a0a0a;
+  }
+
   .notes-editor .ql-toolbar {
     border: none !important;
     border-bottom: 1px solid #f3f4f6 !important;
     background: #f9fafb;
     padding: 4px 8px !important;
+  }
+
+  .dark .notes-editor .ql-toolbar {
+    border-bottom-color: #1f1f1f !important;
+    background: #111111;
   }
 
   .notes-editor .ql-toolbar button {
@@ -192,9 +298,30 @@
     background: #f3f4f6;
   }
 
+  .dark .notes-editor .ql-toolbar button:hover {
+    background: #1f1f1f;
+  }
+
+  .dark .notes-editor .ql-toolbar .ql-stroke {
+    stroke: #a1a1a1;
+  }
+
+  .dark .notes-editor .ql-toolbar .ql-fill {
+    fill: #a1a1a1;
+  }
+
+  .dark .notes-editor .ql-toolbar button:hover .ql-stroke,
+  .dark .notes-editor .ql-toolbar button.ql-active .ql-stroke {
+    stroke: #ededed;
+  }
+
   .notes-editor .ql-toolbar button.ql-active {
     background: #fce7f3;
     color: #ec4899;
+  }
+
+  .dark .notes-editor .ql-toolbar button.ql-active {
+    background: #500724;
   }
 
   .notes-editor .ql-container {
@@ -211,9 +338,17 @@
     font-size: 16px;
   }
 
+  .dark .notes-editor .ql-editor {
+    color: #d4d4d8;
+  }
+
   .notes-editor .ql-editor.ql-blank::before {
     color: #9ca3af;
     font-style: normal;
+  }
+
+  .dark .notes-editor .ql-editor.ql-blank::before {
+    color: #525252;
   }
 }
 
@@ -261,4 +396,10 @@
     linear-gradient(#ec4899, #ec4899),
     conic-gradient(from var(--border-angle), #ec4899, #f9a8d4, #ffffff, #f9a8d4, #ec4899);
   animation: border-spin 8s linear infinite, soft-glow 6s ease-in-out infinite;
+}
+
+.dark .animated-border {
+  background-image:
+    linear-gradient(#ec4899, #ec4899),
+    conic-gradient(from var(--border-angle), #ec4899, #f472b6, #0a0a0a, #f472b6, #ec4899);
 }

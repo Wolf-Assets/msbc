@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { events, eventItems } from '@/db/schema';
 import { eq, desc, isNull, isNotNull } from 'drizzle-orm';
+import { logAudit, diffFields } from '@/db/audit';
 
 interface CreateEventBody {
   name: string;
@@ -90,12 +91,23 @@ export async function POST(request: NextRequest) {
     notes: body.notes || null,
   }).returning();
 
-  return NextResponse.json(result[0]);
+  const newRow = result[0];
+  await logAudit({
+    action: 'create',
+    entityType: 'event',
+    entityId: newRow.id,
+    entityLabel: newRow.name,
+    after: { ...newRow },
+  });
+
+  return NextResponse.json(newRow);
 }
 
 export async function PUT(request: NextRequest) {
   const body: UpdateEventBody = await request.json();
   const { id, ...updates } = body;
+
+  const before = await db.select().from(events).where(eq(events.id, id)).get();
 
   // Recalculate totals if updating event items
   if (updates.recalculate) {
@@ -112,6 +124,29 @@ export async function PUT(request: NextRequest) {
 
   await db.update(events).set(updates).where(eq(events.id, id));
   const updated = await db.select().from(events).where(eq(events.id, id)).get();
+
+  if (before && updated) {
+    // Determine soft-delete vs restore vs regular update
+    let action: 'update' | 'delete' | 'restore' = 'update';
+    if (updates.deletedAt !== undefined) {
+      if (updates.deletedAt === null && before.deletedAt) {
+        action = 'restore';
+      } else if (updates.deletedAt !== null && !before.deletedAt) {
+        action = 'delete';
+      }
+    }
+
+    await logAudit({
+      action,
+      entityType: 'event',
+      entityId: id,
+      entityLabel: updated.name,
+      changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+      before: { ...before },
+      after: { ...updated },
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -119,15 +154,40 @@ export async function DELETE(request: NextRequest) {
   const body: DeleteEventBody = await request.json();
   const { id, hard } = body;
 
+  const before = await db.select().from(events).where(eq(events.id, id)).get();
+
   if (hard) {
     // Hard delete — permanently remove from database
     await db.delete(eventItems).where(eq(eventItems.eventId, id));
     await db.delete(events).where(eq(events.id, id));
+
+    if (before) {
+      await logAudit({
+        action: 'delete',
+        entityType: 'event',
+        entityId: id,
+        entityLabel: before.name,
+        before: { ...before },
+      });
+    }
   } else {
     // Soft delete — set deletedAt timestamp
     await db.update(events).set({
       deletedAt: new Date().toISOString(),
     }).where(eq(events.id, id));
+
+    const updated = await db.select().from(events).where(eq(events.id, id)).get();
+    if (before && updated) {
+      await logAudit({
+        action: 'delete',
+        entityType: 'event',
+        entityId: id,
+        entityLabel: updated.name,
+        changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+        before: { ...before },
+        after: { ...updated },
+      });
+    }
   }
 
   return NextResponse.json({ success: true });

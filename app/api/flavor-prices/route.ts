@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
-import { flavorPrices, deliveryItems, deliveries, eventItems, events } from '@/db/schema';
+import { flavorPrices, deliveryItems, deliveries, eventItems, events, flavors } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { logAudit, diffFields } from '@/db/audit';
 
 interface CreateFlavorPriceBody {
   flavorId: number;
@@ -20,6 +21,16 @@ interface UpdateFlavorPriceBody {
 
 interface DeleteFlavorPriceBody {
   id: number;
+}
+
+async function buildFlavorPriceLabel(flavorId: number, tierName: string): Promise<string> {
+  try {
+    const flavor = await db.select().from(flavors).where(eq(flavors.id, flavorId)).get();
+    if (flavor?.name) return `${flavor.name} — ${tierName}`;
+  } catch {
+    // ignore
+  }
+  return tierName;
 }
 
 export async function GET(request: NextRequest) {
@@ -45,12 +56,24 @@ export async function POST(request: NextRequest) {
     cost: body.cost ?? null,
   }).returning();
 
-  return NextResponse.json(result[0]);
+  const newRow = result[0];
+  const label = await buildFlavorPriceLabel(newRow.flavorId, newRow.tierName);
+  await logAudit({
+    action: 'create',
+    entityType: 'flavor_price',
+    entityId: newRow.id,
+    entityLabel: label,
+    after: { ...newRow },
+  });
+
+  return NextResponse.json(newRow);
 }
 
 export async function PUT(request: NextRequest) {
   const body: UpdateFlavorPriceBody = await request.json();
   const { id, ...updates } = body;
+
+  const before = await db.select().from(flavorPrices).where(eq(flavorPrices.id, id)).get();
 
   // Update the rate itself
   await db.update(flavorPrices).set(updates).where(eq(flavorPrices.id, id));
@@ -58,6 +81,19 @@ export async function PUT(request: NextRequest) {
 
   if (!updated) {
     return NextResponse.json({ error: 'Rate not found' }, { status: 404 });
+  }
+
+  if (before) {
+    const label = await buildFlavorPriceLabel(updated.flavorId, updated.tierName);
+    await logAudit({
+      action: 'update',
+      entityType: 'flavor_price',
+      entityId: id,
+      entityLabel: label,
+      changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+      before: { ...before },
+      after: { ...updated },
+    });
   }
 
   // Cascade: update all delivery_items linked to this rate
@@ -117,11 +153,25 @@ export async function DELETE(request: NextRequest) {
   const body: DeleteFlavorPriceBody = await request.json();
   const { id } = body;
 
+  const before = await db.select().from(flavorPrices).where(eq(flavorPrices.id, id)).get();
+
   // Unlink items before deleting the rate
   await db.update(deliveryItems).set({ rateId: null }).where(eq(deliveryItems.rateId, id));
   await db.update(eventItems).set({ rateId: null }).where(eq(eventItems.rateId, id));
 
   await db.delete(flavorPrices).where(eq(flavorPrices.id, id));
+
+  if (before) {
+    const label = await buildFlavorPriceLabel(before.flavorId, before.tierName);
+    await logAudit({
+      action: 'delete',
+      entityType: 'flavor_price',
+      entityId: id,
+      entityLabel: label,
+      before: { ...before },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }
 

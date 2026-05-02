@@ -149,7 +149,7 @@ function EditableCell({ value, onSave, isEditing, onEdit, onBlur, type = 'text',
       className={`editable-cell cursor-text group/edit flex items-center gap-1.5 ${className}`}
     >
       {showPencil && (
-        <svg className="text-gray-300 group-hover/edit:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="text-gray-300 dark:text-zinc-700 group-hover/edit:text-gray-400 dark:group-hover/edit:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
         </svg>
       )}
@@ -319,14 +319,14 @@ export default function FlavorsTable() {
   };
 
   const formatMargin = (price: number, cost: number | null): React.ReactElement => {
-    if (cost == null || price <= 0) return <span className="text-gray-300">{'\u2014'}</span>;
+    if (cost == null || price <= 0) return <span className="text-gray-300 dark:text-zinc-700">{'\u2014'}</span>;
     const margin = ((price - cost) / price) * 100;
-    return <span className="text-green-600 font-medium">{margin.toFixed(0)}%</span>;
+    return <span className="text-green-600 dark:text-green-400 font-medium">{margin.toFixed(0)}%</span>;
   };
 
   if (loading) {
     return (
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
+      <div className="w-full bg-[#fafafc] dark:bg-[#0a0a0a] rounded-3xl overflow-hidden p-8">
         <div className="flex items-center justify-center py-12">
           <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -336,11 +336,11 @@ export default function FlavorsTable() {
 
   return (
     <div>
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden">
+      <div className="w-full bg-[#fafafc] dark:bg-[#0a0a0a] rounded-3xl overflow-hidden">
         <div className="flex items-center justify-between px-8 pt-8 pb-6">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Flavors</h2>
-            <p className="text-sm text-gray-400 mt-1">Click any cell to edit inline.</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Flavors</h2>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">Click any cell to edit inline.</p>
           </div>
           <button
             onClick={addFlavor}
@@ -373,9 +373,9 @@ export default function FlavorsTable() {
                 return (
                   <Fragment key={flavor.id}>
                     {/* Main flavor row: #, Name, delete */}
-                    <tr className={`group transition-colors duration-1000 ${newFlavorId === flavor.id ? 'bg-pink-50' : ''}`}>
+                    <tr className={`group transition-colors duration-1000 ${newFlavorId === flavor.id ? 'bg-pink-50 dark:bg-pink-950/40' : ''}`}>
                       <td className="text-center">
-                        <span className="text-gray-400 text-sm">{flavors.length - index}</span>
+                        <span className="text-gray-400 dark:text-zinc-500 text-sm">{flavors.length - index}</span>
                       </td>
                       <td>
                         <div className="flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function FlavorsTable() {
                       <td>
                         <button
                           onClick={() => setAddingPriceFor(addingPriceFor === flavor.id ? null : flavor.id)}
-                          className="rounded-full px-3 py-1 text-xs font-medium text-green-600 bg-green-50 border border-green-200 hover:bg-green-100 transition-colors whitespace-nowrap"
+                          className="rounded-full px-3 py-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors whitespace-nowrap"
                         >
                           Add rate
                         </button>
@@ -407,11 +407,11 @@ export default function FlavorsTable() {
 
                     {/* Rate rows — all from flavor_prices, all equal */}
                     {prices.map(price => (
-                      <tr key={`price-${price.id}`} className="bg-gray-50/50">
+                      <tr key={`price-${price.id}`} className="bg-gray-50/50 dark:bg-[#171717]/50">
                         <td></td>
                         <td>
                           <div className="flex items-center gap-2 pl-6">
-                            <span className="text-gray-300 text-sm">{'\u2514'}</span>
+                            <span className="text-gray-300 dark:text-zinc-700 text-sm">{'\u2514'}</span>
                             <EditableCell
                               value={price.tierName}
                               onSave={(value) => updateFlavorPrice(price.id, 'tierName', value)}
@@ -419,7 +419,7 @@ export default function FlavorsTable() {
                               onEdit={() => setEditingCell({ id: price.id, field: 'tierName', table: 'price' })}
                               onBlur={() => setEditingCell(null)}
                               showPencil
-                              className="text-sm text-gray-600"
+                              className="text-sm text-gray-600 dark:text-zinc-400"
                             />
                           </div>
                         </td>
@@ -461,11 +461,11 @@ export default function FlavorsTable() {
 
                     {/* Add new tier row */}
                     {addingPriceFor === flavor.id ? (
-                      <tr className="bg-pink-50/30">
+                      <tr className="bg-pink-50/30 dark:bg-pink-950/20">
                         <td></td>
                         <td>
                           <div className="flex items-center gap-2 pl-6">
-                            <span className="text-gray-300 text-sm">{'\u2514'}</span>
+                            <span className="text-gray-300 dark:text-zinc-700 text-sm">{'\u2514'}</span>
                             <input
                               ref={newTierNameRef}
                               type="text"
@@ -511,7 +511,7 @@ export default function FlavorsTable() {
                           <div className="flex gap-1">
                             <button
                               onClick={() => addPriceTier(flavor.id)}
-                              className="p-1.5 text-green-500 hover:text-green-600"
+                              className="p-1.5 text-green-500 dark:text-green-400 hover:text-green-600 dark:hover:text-green-300"
                               title="Save"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -520,7 +520,7 @@ export default function FlavorsTable() {
                             </button>
                             <button
                               onClick={() => { setAddingPriceFor(null); setNewTierName(''); setNewTierPrice(''); setNewTierCost(''); }}
-                              className="p-1.5 text-gray-400 hover:text-gray-500"
+                              className="p-1.5 text-gray-400 dark:text-zinc-500 hover:text-gray-500 dark:hover:text-zinc-400"
                               title="Cancel"
                             >
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -538,7 +538,7 @@ export default function FlavorsTable() {
           </table>
 
           {flavors.length === 0 && (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-gray-400 dark:text-zinc-500">
               No flavors yet. Click &quot;Add Flavor&quot; to get started.
             </div>
           )}

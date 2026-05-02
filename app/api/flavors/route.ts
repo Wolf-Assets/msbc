@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { flavors } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { logAudit, diffFields } from '@/db/audit';
 
 interface CreateFlavorBody {
   name: string;
@@ -37,15 +38,38 @@ export async function POST(request: NextRequest) {
     isActive: body.isActive !== false,
   }).returning();
 
-  return NextResponse.json(result[0]);
+  const newRow = result[0];
+  await logAudit({
+    action: 'create',
+    entityType: 'flavor',
+    entityId: newRow.id,
+    entityLabel: newRow.name,
+    after: { ...newRow },
+  });
+
+  return NextResponse.json(newRow);
 }
 
 export async function PUT(request: NextRequest) {
   const body: UpdateFlavorBody = await request.json();
   const { id, ...updates } = body;
 
+  const before = await db.select().from(flavors).where(eq(flavors.id, id)).get();
   await db.update(flavors).set(updates).where(eq(flavors.id, id));
   const updated = await db.select().from(flavors).where(eq(flavors.id, id)).get();
+
+  if (before && updated) {
+    await logAudit({
+      action: 'update',
+      entityType: 'flavor',
+      entityId: id,
+      entityLabel: updated.name,
+      changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+      before: { ...before },
+      after: { ...updated },
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -53,6 +77,18 @@ export async function DELETE(request: NextRequest) {
   const body: DeleteFlavorBody = await request.json();
   const { id } = body;
 
+  const before = await db.select().from(flavors).where(eq(flavors.id, id)).get();
   await db.delete(flavors).where(eq(flavors.id, id));
+
+  if (before) {
+    await logAudit({
+      action: 'delete',
+      entityType: 'flavor',
+      entityId: id,
+      entityLabel: before.name,
+      before: { ...before },
+    });
+  }
+
   return NextResponse.json({ success: true });
 }

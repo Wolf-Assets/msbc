@@ -3,7 +3,7 @@ import type { ComponentType } from 'react';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import 'react-day-picker/style.css';
-import type { MapKitMap, MapKitAnnotation, MapKitGeocoder, MapKitCoordinate, MapKitGeocoderResponse } from '../types/mapkit.d';
+import AppleMap from './AppleMap';
 
 // Type for React-Quill component props
 interface QuillEditorProps {
@@ -22,9 +22,6 @@ interface QuillModules {
 
 // Type for dynamically loaded Quill component
 type QuillComponentType = ComponentType<QuillEditorProps>;
-
-// Apple MapKit JS Token (from environment variable)
-const MAPKIT_TOKEN = process.env.NEXT_PUBLIC_MAPKIT_TOKEN || '';
 
 interface Event {
   id: number;
@@ -475,7 +472,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       {/* Back link */}
       <a
         href="/events"
-        className="inline-flex items-center gap-2 text-gray-500 hover:text-pink-600 transition-colors text-sm font-medium"
+        className="inline-flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors text-sm font-medium"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -489,7 +486,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
         <div className="flex-[4]">
           {/* Event Header Card */}
           <div
-            className="bg-white rounded-3xl overflow-hidden"
+            className="bg-white dark:bg-[#0a0a0a] rounded-3xl overflow-hidden"
             style={{
               boxShadow: '0 8px 60px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
             }}
@@ -499,20 +496,20 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <EditableText
               value={event.name}
               onSave={(value) => updateEvent('name', value)}
-              className="text-3xl font-bold text-gray-900"
+              className="text-3xl font-bold text-gray-900 dark:text-zinc-100"
             />
-            <span className="text-2xl text-pink-400 shrink-0" style={{ fontFamily: 'Geist, system-ui, sans-serif' }}>@</span>
+            <span className="text-2xl text-pink-400 dark:text-pink-500 shrink-0" style={{ fontFamily: 'Geist, system-ui, sans-serif' }}>@</span>
             <div className="relative shrink-0">
               <button
                 onClick={() => setEditingDate(!editingDate)}
-                className="text-2xl font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-2 py-1 -ml-2 rounded transition-colors whitespace-nowrap text-left"
+                className="text-2xl font-medium text-gray-600 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-[#1f1f1f] px-2 py-1 -ml-2 rounded transition-colors whitespace-nowrap text-left"
               >
                 {formatDate(event.eventDate)}
               </button>
               {editingDate && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setEditingDate(false)} />
-                  <div className="absolute left-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4">
+                  <div className="absolute left-0 top-full mt-2 z-50 bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl border border-gray-100 dark:border-[#1f1f1f] p-4">
                     <DayPicker
                       mode="single"
                       selected={new Date(event.eventDate + 'T00:00:00')}
@@ -525,11 +522,11 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
               )}
             </div>
             <div className="ml-auto shrink-0 flex items-center gap-1">
-              <span className="text-lg text-gray-400">Fee:</span>
+              <span className="text-lg text-gray-400 dark:text-zinc-500">Fee:</span>
               <EditableNumber
                 value={event.eventCost}
                 onSave={(value) => updateEvent('eventCost', value)}
-                className="text-xl font-medium text-gray-600"
+                className="text-xl font-medium text-gray-600 dark:text-zinc-400"
                 isCurrency
               />
             </div>
@@ -566,10 +563,10 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
         {/* Details Section - inside same card */}
         <div className="px-8 pb-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-2xl font-bold text-gray-900">Details</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Details</h3>
             <button
               onClick={() => setShowAddFlavor(true)}
-              className="px-3 py-1.5 text-pink-600 hover:bg-pink-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+              className="px-3 py-1.5 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-950/30 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -579,7 +576,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
           </div>
 
           {items.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-gray-400 dark:text-zinc-500">
               No flavors added to this event yet.
             </div>
           ) : (
@@ -603,7 +600,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                 {sortedItems.map((item) => (
                   <tr key={item.id} className="group">
                     <td>
-                      <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
+                      <span className="editable-cell font-medium text-gray-900 dark:text-zinc-100 whitespace-nowrap">
                         {item.flavorName}
                       </span>
                     </td>
@@ -612,7 +609,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       <EditableNumber
                         value={item.prepared}
                         onSave={(val) => updateItem(item.id, 'prepared', val)}
-                        className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center"
                         showPencil
                       />
                     </td>
@@ -620,7 +617,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       <EditableNumber
                         value={item.sold}
                         onSave={(val) => updateItem(item.id, 'sold', val)}
-                        className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center"
                         showPencil
                       />
                     </td>
@@ -628,12 +625,12 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       <EditableNumber
                         value={item.giveaway || 0}
                         onSave={(val) => updateItem(item.id, 'giveaway', val)}
-                        className="editable-cell text-gray-600 text-sm text-center justify-center"
+                        className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center"
                         showPencil
                       />
                     </td>
                     <td className="text-center">
-                      <span className="editable-cell text-gray-600 text-sm text-center justify-center">
+                      <span className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center">
                         {item.remaining}
                       </span>
                     </td>
@@ -667,7 +664,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                               });
                             }
                           }}
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
+                          className="w-56 text-xs border border-gray-200 dark:border-[#262626] rounded-lg px-2 py-1 bg-white dark:bg-[#0a0a0a] dark:text-zinc-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
                         >
                           {getRatesForFlavor(item.flavorName).map(rate => (
                             <option key={rate.id} value={rate.tierName}>
@@ -679,21 +676,21 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       </div>
                     </td>
                     <td className="text-right">
-                      <span className="editable-cell text-sm text-right justify-end text-gray-600">
+                      <span className="editable-cell text-sm text-right justify-end text-gray-600 dark:text-zinc-400">
                         {item.cogs > 0 ? formatCurrency(item.cogs) : '—'}
                       </span>
                     </td>
                     <td className="text-right">
-                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
+                      <span className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-right justify-end">
                         {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
                       </span>
                     </td>
                     <td className="text-right">
                       <span className="editable-cell text-sm text-right justify-end">
                         {item.profit > 0 ? (
-                          <span className="text-green-600 font-medium">{formatCurrency(item.profit)}</span>
+                          <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(item.profit)}</span>
                         ) : item.profit < 0 ? (
-                          <span className="text-red-500 font-medium">{formatCurrency(item.profit)}</span>
+                          <span className="text-red-500 dark:text-red-400 font-medium">{formatCurrency(item.profit)}</span>
                         ) : (
                           '—'
                         )}
@@ -705,39 +702,39 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                   </tr>
                 ))}
                 {/* Totals Row */}
-                <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
+                <tr className="border-t-2 border-gray-200 dark:border-[#262626] bg-gray-50 dark:bg-[#171717] font-medium">
                   <td>
-                    <span className="editable-cell font-bold text-gray-900">Total</span>
+                    <span className="editable-cell font-bold text-gray-900 dark:text-zinc-100">Total</span>
                   </td>
                   <td></td>
                   <td className="text-center">
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="editable-cell text-gray-900 dark:text-zinc-100 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.prepared, 0)}
                     </span>
                   </td>
                   <td className="text-center">
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="editable-cell text-gray-900 dark:text-zinc-100 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.sold, 0)}
                     </span>
                   </td>
                   <td className="text-center">
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="editable-cell text-gray-900 dark:text-zinc-100 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + (i.giveaway || 0), 0)}
                     </span>
                   </td>
                   <td className="text-center">
-                    <span className="editable-cell text-gray-900 text-sm text-center justify-center font-semibold">
+                    <span className="editable-cell text-gray-900 dark:text-zinc-100 text-sm text-center justify-center font-semibold">
                       {items.reduce((sum, i) => sum + i.remaining, 0)}
                     </span>
                   </td>
                   <td></td>
                   <td className="text-right">
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 dark:text-zinc-100">
                       {formatCurrency(items.reduce((sum, i) => sum + i.cogs, 0))}
                     </span>
                   </td>
                   <td className="text-right">
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 dark:text-zinc-100">
                       {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
                     </span>
                   </td>
@@ -746,9 +743,9 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       {(() => {
                         const totalProfit = items.reduce((sum, i) => sum + i.profit, 0);
                         return totalProfit >= 0 ? (
-                          <span className="text-green-600 font-bold">{formatCurrency(totalProfit)}</span>
+                          <span className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(totalProfit)}</span>
                         ) : (
-                          <span className="text-red-500 font-bold">{formatCurrency(totalProfit)}</span>
+                          <span className="text-red-500 dark:text-red-400 font-bold">{formatCurrency(totalProfit)}</span>
                         );
                       })()}
                     </span>
@@ -761,7 +758,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
 
           {/* Notes Section */}
           <div className="mt-6">
-            <h3 className="text-2xl font-bold text-gray-900 mb-3">Notes</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mb-3">Notes</h3>
             <NotesEditor
               content={event.notes || ''}
               onSave={(content) => updateEvent('notes', content)}
@@ -772,7 +769,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
           <div className="mt-8 mb-4">
             <button
               onClick={(e) => handleDeleteEvent(e)}
-              className="text-red-500 text-sm hover:text-red-600 transition-colors"
+              className="text-red-500 dark:text-red-400 text-sm hover:text-red-600 dark:hover:text-red-300 transition-colors"
             >
               {pendingDeleteEvent ? (
                 <span className="animate-pulse">{hardDelete ? 'Confirm? Tap Again to PERMANENTLY DELETE' : 'Confirm? Tap Again to Archive'}</span>
@@ -789,21 +786,21 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
       <div className="flex-1 space-y-4">
         {/* Location Card */}
         <div
-          className="bg-white rounded-2xl overflow-hidden"
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl overflow-hidden"
           style={{
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Location</h3>
+          <div className="p-4 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Location</h3>
           </div>
-          <div className="aspect-[4/3] bg-gray-100 relative">
+          <div className="aspect-[4/3] bg-gray-100 dark:bg-[#171717] relative">
             {event.location ? (
-              <AppleMap location={event.location} eventName={event.name} />
+              <AppleMap location={event.location} markerTitle={event.name} />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-500 text-sm">
                 <div className="text-center">
-                  <svg className="w-10 h-10 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-10 h-10 mx-auto text-gray-300 dark:text-zinc-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -816,13 +813,13 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <EditableText
               value={event.location || 'Click to add address'}
               onSave={(value) => updateEvent('location', value === 'Click to add address' ? '' : value)}
-              className="text-sm text-gray-600"
+              className="text-sm text-gray-600 dark:text-zinc-400"
               multiline
             />
             {event.location && (
               <button
                 onClick={() => updateEvent('location', '')}
-                className="text-xs text-red-400 hover:text-red-500 mt-2 transition-colors"
+                className="text-xs text-red-400 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400 mt-2 transition-colors"
               >
                 Remove Address
               </button>
@@ -832,25 +829,25 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
 
         {/* Payment Methods Card */}
         <div
-          className="bg-white rounded-2xl overflow-hidden"
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl overflow-hidden"
           style={{
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Payments Collected</h3>
+          <div className="p-4 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Payments Collected</h3>
           </div>
           <div className="p-4 space-y-3">
             {/* Cash */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-lg">💵</span>
-                <span className="text-sm font-medium text-gray-700">Cash</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Cash</span>
               </div>
               <EditableText
                 value={event.cashCollected ? formatCurrency(event.cashCollected) : '$0.00'}
                 onSave={(value) => updateEvent('cashCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
@@ -859,12 +856,12 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-lg">📱</span>
-                <span className="text-sm font-medium text-gray-700">Venmo</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Venmo</span>
               </div>
               <EditableText
                 value={event.venmoCollected ? formatCurrency(event.venmoCollected) : '$0.00'}
                 onSave={(value) => updateEvent('venmoCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
@@ -873,20 +870,20 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-lg">💳</span>
-                <span className="text-sm font-medium text-gray-700">Other</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Other</span>
               </div>
               <EditableText
                 value={event.otherCollected ? formatCurrency(event.otherCollected) : '$0.00'}
                 onSave={(value) => updateEvent('otherCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
 
             {/* Total */}
-            <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-900">Total Collected</span>
-              <span className="text-lg font-bold text-green-600">
+            <div className="pt-3 mt-3 border-t border-gray-100 dark:border-[#1f1f1f] flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Total Collected</span>
+              <span className="text-lg font-bold text-green-600 dark:text-green-400">
                 {formatCurrency((event.cashCollected || 0) + (event.venmoCollected || 0) + (event.otherCollected || 0))}
               </span>
             </div>
@@ -907,11 +904,11 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => { setShowAddFlavor(false); resetAddFlavorForm(); }} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Add Flavor to Event</h3>
+            <div className="bg-white dark:bg-[#0a0a0a] dark:border dark:border-[#262626] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-zinc-100 mb-4">Add Flavor to Event</h3>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Flavor</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Flavor</label>
                 <select
                   value={selectedFlavorId}
                   onChange={(e) => {
@@ -924,7 +921,7 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
                       setSelectedRateId('');
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option value="">Choose a flavor...</option>
                   {availableFlavors.map(flavor => (
@@ -937,11 +934,11 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
 
               {selectedFlavorId && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Rate</label>
                   <select
                     value={selectedRateId}
                     onChange={(e) => setSelectedRateId(e.target.value ? parseInt(e.target.value) : '')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   >
                     <option value="">Choose a rate...</option>
                     {flavorPrices.filter(p => p.flavorId === selectedFlavorId).map(rate => (
@@ -954,19 +951,19 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
               )}
 
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Prepared Qty</label>
                 <input
                   type="number"
                   value={newItemPrepared}
                   onChange={(e) => setNewItemPrepared(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 />
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => { setShowAddFlavor(false); resetAddFlavorForm(); }}
-                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-[#1f1f1f] rounded-lg font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -988,10 +985,10 @@ export default function EventDetail({ eventId: propEventId }: EventDetailProps) 
 // Stat Card Component
 function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }) {
   return (
-    <div className={`p-4 rounded-2xl ${highlight ? 'bg-pink-50' : 'bg-gray-50'}`}>
-      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600' : 'text-gray-900'}`}>{value}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-1">{sublabel}</p>}
+    <div className={`p-4 rounded-2xl ${highlight ? 'bg-pink-50 dark:bg-pink-950/40' : 'bg-gray-50 dark:bg-[#171717]'}`}>
+      <p className="text-xs text-gray-400 dark:text-zinc-500 uppercase tracking-wide font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600 dark:text-pink-400' : 'text-gray-900 dark:text-zinc-100'}`}>{value}</p>
+      {sublabel && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">{sublabel}</p>}
     </div>
   );
 }
@@ -1049,7 +1046,7 @@ function EditableText({ value, onSave, className, allowEmpty = false, multiline 
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
           rows={3}
-          className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2 py-1 w-full resize-none`}
+          className={`${className} bg-white dark:bg-[#0a0a0a] border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2 py-1 w-full resize-none`}
         />
       );
     }
@@ -1061,136 +1058,15 @@ function EditableText({ value, onSave, className, allowEmpty = false, multiline 
         onChange={(e) => setEditValue(e.target.value)}
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
-        className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2`}
+        className={`${className} bg-white dark:bg-[#0a0a0a] border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2`}
       />
     );
   }
 
   return (
-    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2 whitespace-pre-wrap`}>
+    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 dark:hover:bg-[#171717] rounded-lg px-2 -mx-2 whitespace-pre-wrap`}>
       {value}
     </div>
-  );
-}
-
-// Apple Map Component
-function AppleMap({ location, eventName }: { location: string; eventName: string }) {
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<MapKitMap | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const initMap = useCallback(async () => {
-    if (!mapContainerRef.current || mapRef.current) return;
-
-    try {
-      const mapkit = window.mapkit;
-      if (!mapkit) {
-        setError('MapKit not loaded');
-        return;
-      }
-
-      // Initialize MapKit if not already done
-      if (!mapkit.init) {
-        setError('MapKit initialization failed');
-        return;
-      }
-
-      // Check if already initialized
-      try {
-        mapkit.init({
-          authorizationCallback: (done: (token: string) => void) => {
-            done(MAPKIT_TOKEN);
-          },
-        });
-      } catch {
-        // Already initialized, continue
-      }
-
-      // Create the map
-      const map = new mapkit.Map(mapContainerRef.current, {
-        colorScheme: mapkit.Map.ColorSchemes.Light,
-        showsCompass: mapkit.FeatureVisibility.Hidden,
-        showsZoomControl: false,
-        showsMapTypeControl: false,
-      });
-      mapRef.current = map;
-
-      // Geocode the location
-      const geocoder = new mapkit.Geocoder();
-      geocoder.lookup(location, (geocodeError: Error | null, data: MapKitGeocoderResponse | null) => {
-        if (geocodeError || !data?.results?.[0]) {
-          setError('Location not found');
-          return;
-        }
-
-        const place = data.results[0];
-        const coordinate = place.coordinate;
-
-        // Add a marker with event name as title
-        const marker = new mapkit.MarkerAnnotation(coordinate, {
-          color: '#ec4899',
-          title: eventName,
-        });
-        map.addAnnotation(marker);
-
-        // Center map on the location (zoomed out a bit)
-        map.region = new mapkit.CoordinateRegion(
-          coordinate,
-          new mapkit.CoordinateSpan(0.05, 0.05)
-        );
-
-        setIsLoaded(true);
-      });
-    } catch {
-      setError('Failed to initialize map');
-    }
-  }, [location, eventName]);
-
-  useEffect(() => {
-    // Load MapKit JS script if not already loaded
-    if (!window.mapkit) {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js';
-      script.crossOrigin = 'anonymous';
-      script.onload = () => initMap();
-      script.onerror = () => setError('Failed to load MapKit');
-      document.head.appendChild(script);
-    } else {
-      initMap();
-    }
-
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.destroy();
-        mapRef.current = null;
-      }
-    };
-  }, [initMap]);
-
-  if (error) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm bg-gray-50">
-        <div className="text-center px-4">
-          <svg className="w-8 h-8 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          <p className="text-xs">{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {!isLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          <div className="animate-pulse text-gray-400 text-sm">Loading map...</div>
-        </div>
-      )}
-      <div ref={mapContainerRef} className="absolute inset-0" />
-    </>
   );
 }
 
@@ -1246,8 +1122,8 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         className={inline
-          ? "w-16 text-right text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
-          : "w-full text-center text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
+          ? "w-16 text-right text-sm bg-white dark:bg-[#0a0a0a] dark:text-zinc-100 border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
+          : "w-full text-center text-sm bg-white dark:bg-[#0a0a0a] dark:text-zinc-100 border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
         }
       />
     );
@@ -1256,10 +1132,10 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={`${className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
+      className={`${className || "editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
     >
       {(showPencil || inline) && (
-        <svg className="text-gray-300 group-hover/num:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="text-gray-300 dark:text-zinc-700 group-hover/num:text-gray-400 dark:group-hover/num:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
         </svg>
       )}
@@ -1319,7 +1195,7 @@ function NotesEditor({ content, onSave }: { content: string; onSave: (content: s
   if (!QuillComponent) {
     return (
       <div className="notes-editor">
-        <div className="border border-gray-200 rounded-xl bg-white min-h-[160px] p-4 text-gray-400 text-sm">
+        <div className="border border-gray-200 dark:border-[#262626] rounded-xl bg-white dark:bg-[#0a0a0a] min-h-[160px] p-4 text-gray-400 dark:text-zinc-500 text-sm">
           Loading editor...
         </div>
       </div>
@@ -1429,13 +1305,13 @@ function SortableHeader({
 
   return (
     <th
-      className={`${className} cursor-pointer hover:bg-gray-50 transition-colors select-none`}
+      className={`${className} cursor-pointer hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors select-none`}
       onClick={() => onSort(column)}
     >
       <div className={`flex items-center gap-1 ${className.includes('text-right') ? 'justify-end' : className.includes('text-center') ? 'justify-center' : ''}`}>
         <span>{label}</span>
         {isActive && (
-          <span className="text-[10px] text-pink-500">
+          <span className="text-[10px] text-pink-500 dark:text-pink-400">
             {direction === 'asc' ? '▲' : '▼'}
           </span>
         )}

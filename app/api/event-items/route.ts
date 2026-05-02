@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { eventItems, events } from '@/db/schema';
 import { eq } from 'drizzle-orm';
+import { logAudit, diffFields } from '@/db/audit';
 
 interface CreateEventItemBody {
   eventId: number;
@@ -35,6 +36,18 @@ interface DeleteEventItemBody {
   eventId?: number;
 }
 
+async function buildEventItemLabel(eventId: number | null | undefined, flavorName: string): Promise<string> {
+  if (eventId) {
+    try {
+      const ev = await db.select().from(events).where(eq(events.id, eventId)).get();
+      if (ev?.name) return `${ev.name} — ${flavorName}`;
+    } catch {
+      // ignore
+    }
+  }
+  return flavorName;
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const eventId = searchParams.get('eventId');
@@ -64,15 +77,27 @@ export async function POST(request: NextRequest) {
     profit: body.profit || 0,
   }).returning();
 
+  const newRow = result[0];
+  const label = await buildEventItemLabel(newRow.eventId, newRow.flavorName);
+  await logAudit({
+    action: 'create',
+    entityType: 'event_item',
+    entityId: newRow.id,
+    entityLabel: label,
+    after: { ...newRow },
+  });
+
   // Recalculate event totals
   await recalculateEventTotals(body.eventId);
 
-  return NextResponse.json(result[0]);
+  return NextResponse.json(newRow);
 }
 
 export async function PUT(request: NextRequest) {
   const body: UpdateEventItemBody = await request.json();
   const { id, eventId, ...updates } = body;
+
+  const before = await db.select().from(eventItems).where(eq(eventItems.id, id)).get();
 
   await db.update(eventItems).set(updates).where(eq(eventItems.id, id));
 
@@ -82,6 +107,20 @@ export async function PUT(request: NextRequest) {
   }
 
   const updated = await db.select().from(eventItems).where(eq(eventItems.id, id)).get();
+
+  if (before && updated) {
+    const label = await buildEventItemLabel(updated.eventId, updated.flavorName);
+    await logAudit({
+      action: 'update',
+      entityType: 'event_item',
+      entityId: id,
+      entityLabel: label,
+      changedFields: diffFields(before as unknown as Record<string, unknown>, updated as unknown as Record<string, unknown>),
+      before: { ...before },
+      after: { ...updated },
+    });
+  }
+
   return NextResponse.json(JSON.parse(JSON.stringify(updated, (_key: string, v: unknown) => typeof v === 'bigint' ? Number(v) : v)));
 }
 
@@ -89,7 +128,20 @@ export async function DELETE(request: NextRequest) {
   const body: DeleteEventItemBody = await request.json();
   const { id, eventId } = body;
 
+  const before = await db.select().from(eventItems).where(eq(eventItems.id, id)).get();
+
   await db.delete(eventItems).where(eq(eventItems.id, id));
+
+  if (before) {
+    const label = await buildEventItemLabel(before.eventId, before.flavorName);
+    await logAudit({
+      action: 'delete',
+      entityType: 'event_item',
+      entityId: id,
+      entityLabel: label,
+      before: { ...before },
+    });
+  }
 
   // Recalculate event totals
   if (eventId) {

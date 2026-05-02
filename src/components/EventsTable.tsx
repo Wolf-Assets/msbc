@@ -163,7 +163,7 @@ export default function EventsTable(): React.JSX.Element {
 
   if (loading) {
     return (
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden p-8">
+      <div className="w-full bg-[#fafafc] dark:bg-[#0a0a0a] rounded-3xl overflow-hidden p-8">
         <div className="flex items-center justify-center py-12">
           <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
         </div>
@@ -174,18 +174,18 @@ export default function EventsTable(): React.JSX.Element {
   return (
     <div>
       {/* Floating Card Container */}
-      <div className="w-full bg-[#fafafc] rounded-3xl overflow-hidden">
+      <div className="w-full bg-[#fafafc] dark:bg-[#0a0a0a] rounded-3xl overflow-hidden">
         {/* Header inside card */}
         <div className="flex items-center justify-between px-8 pt-8 pb-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Events</h2>
-            <p className="text-sm text-gray-400 mt-1">Track your sales events and performance.</p>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Events</h2>
+            <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">Track your sales events and performance.</p>
           </div>
           <div className="flex items-center gap-3">
             {eventsWithLocations.length > 0 && (
               <button
                 onClick={() => setShowMap(true)}
-                className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-full font-medium text-sm hover:bg-gray-50 transition-all hover:shadow-md flex items-center gap-2"
+                className="px-5 py-2.5 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-[#262626] text-gray-700 dark:text-zinc-300 rounded-full font-medium text-sm hover:bg-gray-50 dark:hover:bg-[#171717] transition-all hover:shadow-md flex items-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -198,8 +198,8 @@ export default function EventsTable(): React.JSX.Element {
               onClick={toggleArchived}
               className={`px-5 py-2.5 border rounded-full font-medium text-sm transition-all hover:shadow-md flex items-center gap-2 ${
                 showArchived
-                  ? 'bg-gray-900 border-gray-900 text-white hover:bg-gray-800'
-                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                  ? 'bg-gray-900 border-gray-900 text-white hover:bg-gray-800 dark:bg-zinc-100 dark:border-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200'
+                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 dark:bg-[#0a0a0a] dark:border-[#262626] dark:text-zinc-300 dark:hover:bg-[#171717]'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -263,77 +263,77 @@ export default function EventsTable(): React.JSX.Element {
                 <SortableHeader label="COGS" column="totalCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Fee" column="eventCost" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-20 text-right" />
                 <SortableHeader label="Profit" column="netProfit" currentColumn={sortColumn} direction={sortDirection} onSort={handleSort} className="w-24 text-right" />
-                {showArchived && <th className="w-20"><span className="px-2 py-3 text-xs font-semibold text-gray-400 uppercase"></span></th>}
+                {showArchived && <th className="w-20"><span className="px-2 py-3 text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase"></span></th>}
               </tr>
             </thead>
             <tbody>
               {sortedEvents.map((event) => (
                 <tr
                   key={event.id}
-                  className="group cursor-pointer hover:bg-pink-50 transition-colors"
+                  className="group cursor-pointer hover:bg-pink-50 dark:hover:bg-pink-950/30 transition-colors"
                   onClick={() => window.location.href = `/events/${event.id}`}
                 >
                   <td>
-                    <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-400 text-sm">
+                    <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-400 dark:text-zinc-500 text-sm">
                       {event.id}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center text-pink-600 font-medium text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-pink-600 dark:text-pink-400 font-medium text-sm">
                       {event.name}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-600 text-sm whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-600 dark:text-zinc-400 text-sm whitespace-nowrap">
                       {formatDate(event.eventDate)}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 dark:text-zinc-400 text-sm">
                       {event.totalPrepared}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 dark:text-zinc-400 text-sm">
                       {event.totalSold}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 dark:text-zinc-400 text-sm">
                       {event.totalGiveaway}
                     </span>
                   </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.totalRevenue > 0 ? (
-                        <span className="text-gray-900 font-medium">{formatCurrency(event.totalRevenue)}</span>
+                        <span className="text-gray-900 dark:text-zinc-100 font-medium">{formatCurrency(event.totalRevenue)}</span>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-gray-300 dark:text-zinc-700">—</span>
                       )}
                     </span>
                   </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.totalCost > 0 ? (
-                        <span className="text-gray-600">{formatCurrency(event.totalCost)}</span>
+                        <span className="text-gray-600 dark:text-zinc-400">{formatCurrency(event.totalCost)}</span>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-gray-300 dark:text-zinc-700">—</span>
                       )}
                     </span>
                   </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
-                      <span className={event.eventCost > 0 ? "text-orange-600" : "text-gray-400"}>{formatCurrency(event.eventCost || 0)}</span>
+                      <span className={event.eventCost > 0 ? "text-orange-600 dark:text-orange-400" : "text-gray-400 dark:text-zinc-500"}>{formatCurrency(event.eventCost || 0)}</span>
                     </span>
                   </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {event.netProfit > 0 ? (
-                        <span className="text-green-600 font-medium">{formatCurrency(event.netProfit)}</span>
+                        <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(event.netProfit)}</span>
                       ) : event.netProfit < 0 ? (
-                        <span className="text-red-500 font-medium">{formatCurrency(event.netProfit)}</span>
+                        <span className="text-red-500 dark:text-red-400 font-medium">{formatCurrency(event.netProfit)}</span>
                       ) : (
-                        <span className="text-gray-300">—</span>
+                        <span className="text-gray-300 dark:text-zinc-700">—</span>
                       )}
                     </span>
                   </td>
@@ -342,7 +342,7 @@ export default function EventsTable(): React.JSX.Element {
                       <span className="px-4 py-3 min-h-[44px] flex items-center justify-center">
                         <button
                           onClick={(e: ReactMouseEvent<HTMLButtonElement>) => { e.stopPropagation(); restoreEvent(event.id); }}
-                          className="text-xs font-medium text-pink-500 hover:text-pink-600"
+                          className="text-xs font-medium text-pink-500 dark:text-pink-400 hover:text-pink-600 dark:hover:text-pink-300"
                         >
                           Restore
                         </button>
@@ -353,52 +353,52 @@ export default function EventsTable(): React.JSX.Element {
               ))}
               {/* Totals Row */}
               {events.length > 0 && (
-                <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
+                <tr className="border-t-2 border-gray-200 dark:border-[#262626] bg-gray-50 dark:bg-[#171717] font-medium">
                   <td></td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center font-bold text-gray-900 text-sm">Total</span>
+                    <span className="px-4 py-3 min-h-[44px] flex items-center font-bold text-gray-900 dark:text-zinc-100 text-sm">Total</span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-400 text-sm">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-400 dark:text-zinc-500 text-sm">
                       {events.length} events
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 dark:text-zinc-100 text-sm font-semibold">
                       {totals.prepared.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 dark:text-zinc-100 text-sm font-semibold">
                       {totals.sold.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 text-sm font-semibold">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-900 dark:text-zinc-100 text-sm font-semibold">
                       {totals.giveaway.toLocaleString()}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 dark:text-zinc-100 whitespace-nowrap">
                       {formatCurrency(totals.revenue)}
                     </span>
                   </td>
                   <td>
-                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 whitespace-nowrap">
+                    <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold text-gray-900 dark:text-zinc-100 whitespace-nowrap">
                       {formatCurrency(totals.cost)}
                     </span>
                   </td>
                   <td>
-                    <span className={`px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold whitespace-nowrap ${totals.fee > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                    <span className={`px-4 py-3 min-h-[44px] flex items-center justify-end text-sm font-semibold whitespace-nowrap ${totals.fee > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-zinc-500'}`}>
                       {formatCurrency(totals.fee)}
                     </span>
                   </td>
                   <td>
                     <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
                       {totals.profit >= 0 ? (
-                        <span className="text-green-600 font-bold">{formatCurrency(totals.profit)}</span>
+                        <span className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(totals.profit)}</span>
                       ) : (
-                        <span className="text-red-500 font-bold">{formatCurrency(totals.profit)}</span>
+                        <span className="text-red-500 dark:text-red-400 font-bold">{formatCurrency(totals.profit)}</span>
                       )}
                     </span>
                   </td>
@@ -408,7 +408,7 @@ export default function EventsTable(): React.JSX.Element {
           </table>
 
           {events.length === 0 && (
-            <div className="text-center py-12 text-gray-400">
+            <div className="text-center py-12 text-gray-400 dark:text-zinc-500">
               No events yet. Click "Add Event" to get started.
             </div>
           )}
@@ -622,19 +622,19 @@ function EventsMapModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm">
       {/* Full screen map container */}
-      <div className="absolute inset-0 bg-white">
+      <div className="absolute inset-0 bg-white dark:bg-[#0a0a0a]">
         {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 backdrop-blur-md border-b border-gray-200">
+        <div className="absolute top-0 left-0 right-0 z-10 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-gray-200 dark:border-[#262626]">
           <div className="flex items-center justify-between px-6 py-4">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Past Events Map</h2>
-              <p className="text-sm text-gray-500">{events.length} locations</p>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-zinc-100">Past Events Map</h2>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">{events.length} locations</p>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-[#1f1f1f] rounded-full transition-colors"
             >
-              <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-gray-600 dark:text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -643,10 +643,10 @@ function EventsMapModal({
 
         {/* Loading indicator */}
         {!mapReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-5">
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 dark:bg-[#171717] z-5">
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-3 border-pink-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-gray-500">Loading map...</p>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">Loading map...</p>
             </div>
           </div>
         )}
@@ -660,26 +660,26 @@ function EventsMapModal({
 
         {/* Event Detail Card */}
         {selectedEvent && (
-          <div className="absolute bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-slideUp">
+          <div className="absolute bottom-6 left-6 right-6 md:left-auto md:right-6 md:w-96 bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl border border-gray-200 dark:border-[#262626] overflow-hidden animate-slideUp">
             <div className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900">{selectedEvent.name}</h3>
-                  <p className="text-sm text-gray-500">{formatDate(selectedEvent.eventDate)}</p>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-zinc-100">{selectedEvent.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-zinc-400">{formatDate(selectedEvent.eventDate)}</p>
                 </div>
                 <button
                   onClick={() => onSelectEvent(null)}
-                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-1 hover:bg-gray-100 dark:hover:bg-[#1f1f1f] rounded-full transition-colors"
                 >
-                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-gray-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
               {selectedEvent.location && (
-                <p className="text-sm text-gray-600 mb-4 flex items-center gap-1">
-                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <p className="text-sm text-gray-600 dark:text-zinc-400 mb-4 flex items-center gap-1">
+                  <svg className="w-4 h-4 text-gray-400 dark:text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -688,17 +688,17 @@ function EventsMapModal({
               )}
 
               <div className="grid grid-cols-3 gap-3 mb-4">
-                <div className="text-center p-3 bg-gray-50 rounded-xl">
-                  <p className="text-xs text-gray-400 uppercase">Sold</p>
-                  <p className="text-lg font-bold text-gray-900">{selectedEvent.totalSold}</p>
+                <div className="text-center p-3 bg-gray-50 dark:bg-[#171717] rounded-xl">
+                  <p className="text-xs text-gray-400 dark:text-zinc-500 uppercase">Sold</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-zinc-100">{selectedEvent.totalSold}</p>
                 </div>
-                <div className="text-center p-3 bg-pink-50 rounded-xl">
-                  <p className="text-xs text-pink-400 uppercase">Revenue</p>
-                  <p className="text-lg font-bold text-pink-600">{formatCurrency(selectedEvent.totalRevenue)}</p>
+                <div className="text-center p-3 bg-pink-50 dark:bg-pink-950/40 rounded-xl">
+                  <p className="text-xs text-pink-400 dark:text-pink-500 uppercase">Revenue</p>
+                  <p className="text-lg font-bold text-pink-600 dark:text-pink-400">{formatCurrency(selectedEvent.totalRevenue)}</p>
                 </div>
-                <div className="text-center p-3 bg-green-50 rounded-xl">
-                  <p className="text-xs text-green-400 uppercase">Profit</p>
-                  <p className="text-lg font-bold text-green-600">{formatCurrency(selectedEvent.netProfit)}</p>
+                <div className="text-center p-3 bg-green-50 dark:bg-green-950/40 rounded-xl">
+                  <p className="text-xs text-green-400 dark:text-green-500 uppercase">Profit</p>
+                  <p className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(selectedEvent.netProfit)}</p>
                 </div>
               </div>
 
@@ -735,10 +735,10 @@ function EventsMapModal({
 // Stat Card Component
 function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }): React.JSX.Element {
   return (
-    <div className={`p-4 rounded-2xl border ${highlight ? 'bg-pink-50 border-pink-100' : 'bg-gray-50 border-gray-100'}`}>
-      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600' : 'text-gray-900'}`}>{value}</p>
-      {sublabel && <p className="text-sm text-gray-500 mt-1">{sublabel}</p>}
+    <div className={`p-4 rounded-2xl border ${highlight ? 'bg-pink-50 border-pink-100 dark:bg-pink-950/40 dark:border-pink-900/50' : 'bg-gray-50 border-gray-100 dark:bg-[#171717] dark:border-[#1f1f1f]'}`}>
+      <p className="text-xs text-gray-400 dark:text-zinc-500 uppercase tracking-wide font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600 dark:text-pink-400' : 'text-gray-900 dark:text-zinc-100'}`}>{value}</p>
+      {sublabel && <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">{sublabel}</p>}
     </div>
   );
 }
@@ -765,14 +765,14 @@ function SortableHeader({
 
   return (
     <th
-      className={`cursor-pointer select-none hover:bg-gray-50 transition-colors ${className}`}
+      className={`cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors ${className}`}
       onClick={() => onSort(column)}
     >
       <div className={`flex items-center gap-1 ${isRight ? 'justify-end' : isCenter ? 'justify-center' : ''}`}>
         <span>{label}</span>
         {isActive && (
           <svg
-            className={`w-3 h-3 text-pink-500 transition-transform ${direction === 'desc' ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 text-pink-500 dark:text-pink-400 transition-transform ${direction === 'desc' ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

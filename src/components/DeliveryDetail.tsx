@@ -1,4 +1,6 @@
-import { useState, useRef, useEffect, useCallback, ComponentType } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, ComponentType } from 'react';
+import { useRouter } from 'next/navigation';
+import AppleMap from './AppleMap';
 import { DayPicker } from 'react-day-picker';
 import { format } from 'date-fns';
 import 'react-day-picker/style.css';
@@ -22,6 +24,7 @@ type QuillComponentType = ComponentType<QuillEditorProps>;
 interface Delivery {
   id: number;
   storeName: string;
+  location: string | null;
   datePrepared: string;
   dropoffDate: string | null;
   expirationDate: string | null;
@@ -38,6 +41,7 @@ interface Delivery {
   cashCollected: number;
   venmoCollected: number;
   otherCollected: number;
+  createdAt: string | null;
 }
 
 interface DeliveryItem {
@@ -90,10 +94,16 @@ interface DeliveryDetailProps {
 }
 
 export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
+  const router = useRouter();
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [items, setItems] = useState<DeliveryItem[]>([]);
   const [availableFlavors, setAvailableFlavors] = useState<Flavor[]>([]);
   const [flavorPrices, setFlavorPrices] = useState<FlavorPrice[]>([]);
+  const [allDeliveries, setAllDeliveries] = useState<Delivery[]>([]);
+  const [allDeliveryItems, setAllDeliveryItems] = useState<DeliveryItem[]>([]);
+  // Snapshot of flavors present at page load — suggestions are filtered against this,
+  // not live `items`, so newly-accepted suggestions stay visible until refresh.
+  const [initialFlavorSet, setInitialFlavorSet] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -106,18 +116,123 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       fetch(`/api/delivery-items?deliveryId=${deliveryId}`).then((res: Response) => res.json() as Promise<DeliveryItem[]>),
       fetch('/api/flavors').then((res: Response) => res.json() as Promise<Flavor[]>),
       fetch('/api/flavor-prices').then((res: Response) => res.json() as Promise<FlavorPrice[]>),
+      fetch('/api/deliveries').then((res: Response) => res.json() as Promise<Delivery[]>),
+      fetch('/api/delivery-items').then((res: Response) => res.json() as Promise<DeliveryItem[]>),
     ])
-      .then(([deliveryData, itemsData, flavorsData, pricesData]: [Delivery, DeliveryItem[], Flavor[], FlavorPrice[]]) => {
+      .then(([deliveryData, itemsData, flavorsData, pricesData, allData, allItemsData]: [Delivery, DeliveryItem[], Flavor[], FlavorPrice[], Delivery[], DeliveryItem[]]) => {
         setDelivery(deliveryData);
-        setItems(itemsData || []);
+        const loadedItems = itemsData || [];
+        setItems(loadedItems);
+        setInitialFlavorSet(new Set(loadedItems.map(i => i.flavorName)));
         setAvailableFlavors(flavorsData);
         setFlavorPrices(pricesData);
+        setAllDeliveries(allData || []);
+        setAllDeliveryItems(allItemsData || []);
         setLoading(false);
       })
       .catch(() => {
         setLoading(false);
       });
   }, [deliveryId]);
+
+  const normalizeStore = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+
+  const previousDeliveries = delivery
+    ? allDeliveries
+        .filter(d => normalizeStore(d.storeName) === normalizeStore(delivery.storeName) && d.id !== delivery.id)
+        .sort((a, b) => {
+          const aDate = new Date((a.dropoffDate || a.datePrepared) + 'T00:00:00').getTime();
+          const bDate = new Date((b.dropoffDate || b.datePrepared) + 'T00:00:00').getTime();
+          return bDate - aDate;
+        })
+    : [];
+
+  // Ghost-row suggestions: unique flavors from this store's last 2 deliveries,
+  // each with the most-recent rate that was used for that flavor at this store.
+  // Filters out flavors already present in the current delivery.
+  interface Suggestion {
+    flavorName: string;
+    rateId: number;
+    tierName: string;
+    unitPrice: number;
+    unitCost: number;
+  }
+
+  const suggestions = useMemo<Suggestion[]>(() => {
+    if (!delivery) return [];
+    const lastTwo = previousDeliveries.slice(0, 2);
+    if (lastTwo.length === 0) return [];
+
+    const seen = new Map<string, Suggestion>();
+    for (const prev of lastTwo) {
+      const prevItems = allDeliveryItems.filter(i => i.deliveryId === prev.id);
+      for (const it of prevItems) {
+        if (seen.has(it.flavorName)) continue;
+        if (it.rateId == null) continue;
+        const rate = flavorPrices.find(p => p.id === it.rateId);
+        if (!rate) continue;
+        seen.set(it.flavorName, {
+          flavorName: it.flavorName,
+          rateId: rate.id,
+          tierName: rate.tierName,
+          unitPrice: rate.price,
+          unitCost: rate.cost ?? 0,
+        });
+      }
+    }
+
+    // Filter against the snapshot of flavors at page load (NOT live items),
+    // so accepted suggestions stay visible until next refresh.
+    const baseline = initialFlavorSet ?? new Set<string>(items.map(i => i.flavorName));
+    return [...seen.values()].filter(s => !baseline.has(s.flavorName));
+  }, [delivery, previousDeliveries, allDeliveryItems, flavorPrices, initialFlavorSet, items]);
+
+  const liveFlavorSet = useMemo(() => new Set(items.map(i => i.flavorName)), [items]);
+
+  // Show suggestions if the delivery was empty at load time, OR if it was created today.
+  // Avoids spamming suggestions on long-lived deliveries that already have flavors.
+  const shouldShowSuggestions = useMemo(() => {
+    if (initialFlavorSet === null) return false;
+    if (initialFlavorSet.size === 0) return true;
+    if (!delivery?.createdAt) return false;
+    const created = new Date(delivery.createdAt.replace(' ', 'T') + 'Z');
+    if (isNaN(created.getTime())) return false;
+    const now = new Date();
+    return (
+      created.getFullYear() === now.getFullYear() &&
+      created.getMonth() === now.getMonth() &&
+      created.getDate() === now.getDate()
+    );
+  }, [initialFlavorSet, delivery]);
+
+  const acceptSuggestion = async (s: Suggestion): Promise<void> => {
+    if (!delivery) return;
+    try {
+      const res = await fetch('/api/delivery-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deliveryId: delivery.id,
+          flavorName: s.flavorName,
+          prepared: 0,
+          unitPrice: s.unitPrice,
+          unitCost: s.unitCost,
+          revenue: 0,
+          cogs: 0,
+          profit: 0,
+          rateId: s.rateId,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const newItem: DeliveryItem = await res.json();
+      setItems(prev => [...prev, newItem]);
+      setAllDeliveryItems(prev => [...prev, newItem]);
+      const dRes = await fetch(`/api/deliveries?id=${delivery.id}`);
+      if (dRes.ok) setDelivery(await dRes.json() as Delivery);
+    } catch {
+      showToast('Failed to add suggestion', 'error');
+    }
+  };
 
   const [editingDatePrepared, setEditingDatePrepared] = useState(false);
   const [editingDropoffDate, setEditingDropoffDate] = useState(false);
@@ -466,16 +581,16 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
 
   const getExpirationStatus = (expirationDate: string | null): { color: string; bgColor: string } => {
-    if (!expirationDate) return { color: 'text-gray-500', bgColor: 'bg-gray-100' };
+    if (!expirationDate) return { color: 'text-gray-500 dark:text-zinc-400', bgColor: 'bg-gray-100 dark:bg-[#1f1f1f]' };
 
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const expDate = new Date(expirationDate + 'T00:00:00');
     const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return { color: 'text-red-700', bgColor: 'bg-red-100' };
-    if (diffDays <= 2) return { color: 'text-orange-700', bgColor: 'bg-orange-100' };
-    return { color: 'text-green-700', bgColor: 'bg-green-100' };
+    if (diffDays < 0) return { color: 'text-red-700 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-950/40' };
+    if (diffDays <= 2) return { color: 'text-orange-700 dark:text-orange-400', bgColor: 'bg-orange-100 dark:bg-orange-950/40' };
+    return { color: 'text-green-700 dark:text-green-400', bgColor: 'bg-green-100 dark:bg-green-950/40' };
   };
 
   const handleDownloadInvoice = async () => {
@@ -883,7 +998,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       {/* Back link */}
       <a
         href="/deliveries"
-        className="inline-flex items-center gap-2 text-gray-500 hover:text-pink-600 transition-colors text-sm font-medium"
+        className="inline-flex items-center gap-2 text-gray-500 dark:text-zinc-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors text-sm font-medium"
       >
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -897,7 +1012,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         <div className="flex-[4]">
           {/* Delivery Header Card */}
           <div
-            className="bg-white rounded-3xl overflow-hidden"
+            className="bg-white dark:bg-[#0a0a0a] rounded-3xl overflow-hidden"
             style={{
               boxShadow: '0 8px 60px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)',
             }}
@@ -906,7 +1021,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             <EditableText
               value={delivery.storeName}
               onSave={(value) => updateDelivery('storeName', value)}
-              className="text-3xl font-bold text-gray-900"
+              className="text-3xl font-bold text-gray-900 dark:text-zinc-100"
             />
         </div>
 
@@ -940,10 +1055,10 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         {/* Details Section - inside same card */}
         <div className="px-8 pb-4">
           <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-2xl font-bold text-gray-900">Details</h3>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Details</h3>
             <button
               onClick={() => setShowAddFlavor(true)}
-              className="px-3 py-1.5 text-pink-600 hover:bg-pink-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+              className="px-3 py-1.5 text-pink-600 dark:text-pink-400 hover:bg-pink-50 dark:hover:bg-pink-950/30 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -952,8 +1067,8 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
             </button>
           </div>
 
-          {items.length === 0 ? (
-            <div className="text-center py-12 text-gray-400">
+          {items.length === 0 && !(shouldShowSuggestions && suggestions.length > 0) ? (
+            <div className="text-center py-12 text-gray-400 dark:text-zinc-500">
               No flavors added to this delivery yet.
             </div>
           ) : (
@@ -974,7 +1089,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                 {sortedItems.map((item) => (
                   <tr key={item.id} className="group">
                     <td>
-                      <span className="editable-cell font-medium text-gray-900 whitespace-nowrap">
+                      <span className="editable-cell font-medium text-gray-900 dark:text-zinc-100 whitespace-nowrap">
                         {item.flavorName}
                       </span>
                     </td>
@@ -1011,7 +1126,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                               });
                             }
                           }}
-                          className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
+                          className="w-56 text-xs border border-gray-200 dark:border-[#262626] rounded-lg px-2 py-1 bg-white dark:bg-[#0a0a0a] dark:text-zinc-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 cursor-pointer"
                         >
                           {getRatesForFlavor(item.flavorName).map(rate => (
                             <option key={rate.id} value={rate.tierName}>
@@ -1026,26 +1141,26 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                       <EditableNumber
                         value={item.prepared}
                         onSave={(val) => updateItem(item.id, 'prepared', val)}
-                        className="editable-cell text-gray-600 text-sm text-right justify-end"
+                        className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-right justify-end"
                         showPencil
                       />
                     </td>
                     <td>
-                      <span className="editable-cell text-sm text-right justify-end text-gray-600">
+                      <span className="editable-cell text-sm text-right justify-end text-gray-600 dark:text-zinc-400">
                         {item.cogs > 0 ? formatCurrency(item.cogs) : '—'}
                       </span>
                     </td>
                     <td>
-                      <span className="editable-cell text-gray-600 text-sm text-right justify-end">
+                      <span className="editable-cell text-gray-600 dark:text-zinc-400 text-sm text-right justify-end">
                         {item.revenue > 0 ? formatCurrency(item.revenue) : '—'}
                       </span>
                     </td>
                     <td>
                       <span className="editable-cell text-sm text-right justify-end">
                         {item.profit > 0 ? (
-                          <span className="text-green-600 font-medium">{formatCurrency(item.profit)}</span>
+                          <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(item.profit)}</span>
                         ) : item.profit < 0 ? (
-                          <span className="text-red-500 font-medium">{formatCurrency(item.profit)}</span>
+                          <span className="text-red-500 dark:text-red-400 font-medium">{formatCurrency(item.profit)}</span>
                         ) : (
                           '—'
                         )}
@@ -1056,25 +1171,118 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                     </td>
                   </tr>
                 ))}
+
+                {/* Ghost-row suggestions from previous deliveries */}
+                {shouldShowSuggestions && suggestions.length > 0 && (
+                  <>
+                    <tr>
+                      <td colSpan={8} className="pt-5 pb-1">
+                        <div className="px-4 flex items-center gap-2">
+                          <svg className="w-3.5 h-3.5 text-pink-500" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2l1.5 5.5L19 9l-5.5 1.5L12 16l-1.5-5.5L5 9l5.5-1.5L12 2zm6 11l.9 3.3 3.1.9-3.1.9-.9 3.3-.9-3.3-3.1-.9 3.1-.9.9-3.3z"/>
+                          </svg>
+                          <span className="text-[11px] font-semibold uppercase tracking-wide bg-gradient-to-r from-pink-500 via-fuchsia-500 to-purple-500 bg-clip-text text-transparent">
+                            Suggestions
+                          </span>
+                          <span className="text-[11px] text-gray-400 dark:text-zinc-500">— from previous deliveries</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {suggestions.map((s) => {
+                      const accepted = liveFlavorSet.has(s.flavorName);
+                      return (
+                        <tr
+                          key={`sugg-${s.flavorName}`}
+                          className={`group/sugg transition-colors ${
+                            accepted
+                              ? 'opacity-60'
+                              : 'cursor-pointer hover:bg-pink-50/40 dark:hover:bg-pink-950/20'
+                          }`}
+                          onClick={() => { if (!accepted) acceptSuggestion(s); }}
+                          title={accepted ? 'Already added — refresh to clear' : 'Click to add this flavor'}
+                        >
+                          <td>
+                            <span className={`editable-cell font-medium whitespace-nowrap transition-colors ${
+                              accepted
+                                ? 'text-gray-400 dark:text-zinc-600 line-through'
+                                : 'text-gray-500 dark:text-zinc-500 group-hover/sugg:text-gray-900 dark:group-hover/sugg:text-zinc-100'
+                            }`}>
+                              {s.flavorName}
+                            </span>
+                          </td>
+                          <td></td>
+                          <td className="pl-2">
+                            <span
+                              className={`inline-block text-xs px-2 py-1 transition-colors whitespace-nowrap ${
+                                accepted
+                                  ? 'text-gray-300 dark:text-zinc-700'
+                                  : 'text-gray-400 dark:text-zinc-500 group-hover/sugg:text-gray-600 dark:group-hover/sugg:text-zinc-300'
+                              }`}
+                              title={`${s.tierName} — $${s.unitPrice.toFixed(2)}${s.unitCost ? ` / $${s.unitCost.toFixed(2)} cost` : ''}`}
+                            >
+                              {s.tierName} · ${s.unitPrice.toFixed(2)}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="editable-cell text-gray-300 dark:text-zinc-700 text-sm text-right justify-end">—</span>
+                          </td>
+                          <td>
+                            <span className="editable-cell text-gray-300 dark:text-zinc-700 text-sm text-right justify-end">—</span>
+                          </td>
+                          <td>
+                            <span className="editable-cell text-gray-300 dark:text-zinc-700 text-sm text-right justify-end">—</span>
+                          </td>
+                          <td>
+                            <span className="editable-cell text-gray-300 dark:text-zinc-700 text-sm text-right justify-end">—</span>
+                          </td>
+                          <td>
+                            {accepted ? (
+                              <span
+                                className="rounded-full w-8 h-8 flex items-center justify-center text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/50"
+                                title="Added"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); acceptSuggestion(s); }}
+                                className="rounded-full w-8 h-8 flex items-center justify-center text-pink-500 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-950/60 border border-pink-200 dark:border-pink-900/50 transition-colors"
+                                title="Add this flavor"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </>
+                )}
+
                 {/* Totals Row */}
-                <tr className="border-t-2 border-gray-200 bg-gray-50 font-medium">
+                {items.length > 0 && (
+                <tr className="border-t-2 border-gray-200 dark:border-[#262626] bg-gray-50 dark:bg-[#171717] font-medium">
                   <td>
-                    <span className="editable-cell font-bold text-gray-900">Total</span>
+                    <span className="editable-cell font-bold text-gray-900 dark:text-zinc-100">Total</span>
                   </td>
                   <td></td>
                   <td></td>
                   <td>
-                    <span className="editable-cell text-gray-900 text-sm text-right justify-end font-semibold">
+                    <span className="editable-cell text-gray-900 dark:text-zinc-100 text-sm text-right justify-end font-semibold">
                       {items.reduce((sum, i) => sum + i.prepared, 0)}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 dark:text-zinc-100">
                       {formatCurrency(items.reduce((sum, i) => sum + i.cogs, 0))}
                     </span>
                   </td>
                   <td>
-                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900">
+                    <span className="editable-cell text-sm text-right justify-end font-semibold text-gray-900 dark:text-zinc-100">
                       {formatCurrency(items.reduce((sum, i) => sum + i.revenue, 0))}
                     </span>
                   </td>
@@ -1083,15 +1291,16 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                       {(() => {
                         const totalProfit = items.reduce((sum, i) => sum + i.profit, 0);
                         return totalProfit >= 0 ? (
-                          <span className="text-green-600 font-bold">{formatCurrency(totalProfit)}</span>
+                          <span className="text-green-600 dark:text-green-400 font-bold">{formatCurrency(totalProfit)}</span>
                         ) : (
-                          <span className="text-red-500 font-bold">{formatCurrency(totalProfit)}</span>
+                          <span className="text-red-500 dark:text-red-400 font-bold">{formatCurrency(totalProfit)}</span>
                         );
                       })()}
                     </span>
                   </td>
                   <td></td>
                 </tr>
+                )}
               </tbody>
             </table>
           )}
@@ -1099,14 +1308,14 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
           {/* Notes Section — 50/50 */}
           <div className="mt-6 grid grid-cols-2 gap-6">
             <div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Notes</h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mb-3">Notes</h3>
               <NotesEditor
                 content={delivery.notes || ''}
                 onSave={(content) => updateDelivery('notes', content)}
               />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-3">Invoice Notes</h3>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mb-3">Invoice Notes</h3>
               <NotesEditor
                 content={delivery.invoiceNotes || ''}
                 onSave={(content) => updateDelivery('invoiceNotes', content)}
@@ -1118,7 +1327,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
           <div className="mt-8 mb-4">
             <button
               onClick={(e) => handleDeleteDelivery(e)}
-              className="text-red-500 text-sm hover:text-red-600 transition-colors"
+              className="text-red-500 dark:text-red-400 text-sm hover:text-red-600 dark:hover:text-red-300 transition-colors"
             >
               {pendingDeleteDelivery ? (
                 <span className="animate-pulse">{hardDelete ? 'Confirm? Tap Again to PERMANENTLY DELETE' : 'Confirm? Tap Again to Archive'}</span>
@@ -1133,34 +1342,75 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
       {/* Right side - 20% Sidebar */}
       <div className="flex-1 space-y-4">
+        {/* Location Card */}
+        <div
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl overflow-hidden"
+          style={{ boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)' }}
+        >
+          <div className="p-4 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Location</h3>
+          </div>
+          <div className="aspect-[4/3] bg-gray-100 dark:bg-[#171717] relative">
+            {delivery.location ? (
+              <AppleMap location={delivery.location} markerTitle={delivery.storeName} />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-zinc-500 text-sm">
+                <div className="text-center">
+                  <svg className="w-10 h-10 mx-auto text-gray-300 dark:text-zinc-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  No location set
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-4">
+            <EditableText
+              value={delivery.location || 'Click to add address'}
+              onSave={(value) => updateDelivery('location', value === 'Click to add address' ? '' : value)}
+              className="text-sm text-gray-600 dark:text-zinc-400"
+              multiline
+            />
+            {delivery.location && (
+              <button
+                onClick={() => updateDelivery('location', '')}
+                className="text-xs text-red-400 dark:text-red-500 hover:text-red-500 dark:hover:text-red-400 mt-2 transition-colors"
+              >
+                Remove Address
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Delivery Info Card */}
         <div
-          className="bg-white rounded-2xl"
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl"
           style={{
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Delivery Info</h3>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Delivery Info</h3>
           </div>
           <div className="p-4 space-y-3">
             {/* Date Prepared */}
             <div className="flex items-center justify-between ">
-              <span className="text-sm font-medium text-gray-500">Prepared</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Prepared</span>
               <div className="relative">
                 <button
                   onClick={() => setEditingDatePrepared(!editingDatePrepared)}
-                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 -mr-2 rounded transition-colors group/prep flex items-center gap-1.5"
+                  className="text-sm font-semibold text-gray-900 dark:text-zinc-100 hover:text-pink-600 dark:hover:text-pink-400 hover:bg-gray-50 dark:hover:bg-[#171717] px-2 -mr-2 rounded transition-colors group/prep flex items-center gap-1.5"
                 >
                   {format(new Date(delivery.datePrepared + 'T00:00:00'), 'MMM d, yyyy')}
-                  <svg className="text-gray-300 group-hover/prep:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="text-gray-300 dark:text-zinc-700 group-hover/prep:text-gray-400 dark:group-hover/prep:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
                 {editingDatePrepared && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setEditingDatePrepared(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4">
+                    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl border border-gray-100 dark:border-[#1f1f1f] p-4">
                       <DayPicker
                         mode="single"
                         selected={new Date(delivery.datePrepared + 'T00:00:00')}
@@ -1176,7 +1426,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
             {/* Dropoff Date */}
             <div className="flex items-center justify-between ">
-              <span className="text-sm font-medium text-gray-500">Dropoff</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Dropoff</span>
               <div className="relative flex items-center gap-1">
                 {delivery.dropoffDate && (() => {
                   const dropoff = new Date(delivery.dropoffDate + 'T00:00:00');
@@ -1188,11 +1438,11 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                   const message = beforePrepared ? 'Dropoff is before date prepared' : 'Dropoff is after expiration';
                   return (
                     <div className="group/warn relative">
-                      <svg className="w-5 h-5 text-amber-500 shrink-0 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 text-amber-500 dark:text-amber-400 shrink-0 cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
                       </svg>
                       <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/warn:block">
-                        <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-1.5 whitespace-nowrap shadow-lg">
+                        <div className="bg-gray-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-xs rounded-lg px-3 py-1.5 whitespace-nowrap shadow-lg">
                           {message}
                         </div>
                       </div>
@@ -1201,20 +1451,20 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                 })()}
                 <button
                   onClick={() => setEditingDropoffDate(!editingDropoffDate)}
-                  className="text-sm font-semibold text-gray-900 hover:text-pink-600 hover:bg-gray-50 px-2 -mr-2 rounded transition-colors group/drop flex items-center gap-1.5"
+                  className="text-sm font-semibold text-gray-900 dark:text-zinc-100 hover:text-pink-600 dark:hover:text-pink-400 hover:bg-gray-50 dark:hover:bg-[#171717] px-2 -mr-2 rounded transition-colors group/drop flex items-center gap-1.5"
                 >
                   {delivery.dropoffDate
                     ? format(new Date(delivery.dropoffDate + 'T00:00:00'), 'MMM d, yyyy')
                     : 'Set date'
                   }
-                  <svg className="text-gray-300 group-hover/drop:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="text-gray-300 dark:text-zinc-700 group-hover/drop:text-gray-400 dark:group-hover/drop:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
                 {editingDropoffDate && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setEditingDropoffDate(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4">
+                    <div className="absolute right-0 top-full mt-2 z-50 bg-white dark:bg-[#0a0a0a] rounded-2xl shadow-2xl border border-gray-100 dark:border-[#1f1f1f] p-4">
                       <DayPicker
                         mode="single"
                         selected={delivery.dropoffDate ? new Date(delivery.dropoffDate + 'T00:00:00') : undefined}
@@ -1230,7 +1480,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
             {/* Expiration Date */}
             <div className="flex items-center justify-between ">
-              <span className="text-sm font-medium text-gray-500">Expiration</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Expiration</span>
               {delivery.expirationDate ? (
                 <span className={`text-sm font-semibold px-2 -mr-2 ${expirationStatus.color} flex items-center gap-1.5`}>
                   {format(new Date(delivery.expirationDate + 'T00:00:00'), 'MMM d, yyyy')}
@@ -1239,7 +1489,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                   </svg>
                 </span>
               ) : (
-                <span className="text-sm text-gray-400 px-2 -mr-2 flex items-center gap-1.5">
+                <span className="text-sm text-gray-400 dark:text-zinc-500 px-2 -mr-2 flex items-center gap-1.5">
                   Not set
                   <svg className="invisible shrink-0" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -1252,43 +1502,43 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
         {/* Invoice Details Card */}
         <div
-          className="bg-white rounded-2xl"
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl"
           style={{
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Invoice Details</h3>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Invoice Details</h3>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-500">Additional Fees</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Additional Fees</span>
               <EditableNumber
                 value={delivery.additionalFees || 0}
                 onSave={(val) => updateDelivery('additionalFees', val)}
                 isCurrency
                 inline
-                className="text-sm font-semibold text-gray-900 cursor-text"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100 cursor-text"
               />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-500">Discount</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Discount</span>
               <EditableNumber
                 value={delivery.discount || 0}
                 onSave={(val) => updateDelivery('discount', val)}
                 isCurrency
                 inline
-                className="text-sm font-semibold text-gray-900 cursor-text"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100 cursor-text"
               />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-500">Prepaid Amount</span>
+              <span className="text-sm font-medium text-gray-500 dark:text-zinc-400">Prepaid Amount</span>
               <EditableNumber
                 value={delivery.prepaidAmount || 0}
                 onSave={(val) => updateDelivery('prepaidAmount', val)}
                 isCurrency
                 inline
-                className="text-sm font-semibold text-gray-900 cursor-text"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100 cursor-text"
               />
             </div>
           </div>
@@ -1296,54 +1546,54 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
         {/* Payment Methods Card */}
         <div
-          className="bg-white rounded-2xl overflow-hidden"
+          className="bg-white dark:bg-[#0a0a0a] rounded-2xl overflow-hidden"
           style={{
             boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)',
           }}
         >
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Payments Collected</h3>
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-[#1f1f1f]">
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide">Payments Collected</h3>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm">💵</span>
-                <span className="text-sm font-medium text-gray-700">Cash</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Cash</span>
               </div>
               <EditableText
                 value={delivery.cashCollected ? formatCurrency(delivery.cashCollected) : '$0.00'}
                 onSave={(value) => updateDelivery('cashCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm">📱</span>
-                <span className="text-sm font-medium text-gray-700">Venmo</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Venmo</span>
               </div>
               <EditableText
                 value={delivery.venmoCollected ? formatCurrency(delivery.venmoCollected) : '$0.00'}
                 onSave={(value) => updateDelivery('venmoCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-sm">💳</span>
-                <span className="text-sm font-medium text-gray-700">Other</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-zinc-300">Other</span>
               </div>
               <EditableText
                 value={delivery.otherCollected ? formatCurrency(delivery.otherCollected) : '$0.00'}
                 onSave={(value) => updateDelivery('otherCollected', parseFloat(value.replace(/[$,]/g, '')) || 0)}
-                className="text-sm font-semibold text-gray-900"
+                className="text-sm font-semibold text-gray-900 dark:text-zinc-100"
                 allowEmpty
               />
             </div>
-            <div className="pt-3 mt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-900">Total Collected</span>
-              <span className="text-lg font-bold text-green-600">
+            <div className="pt-3 mt-3 border-t border-gray-100 dark:border-[#1f1f1f] flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Total Collected</span>
+              <span className="text-lg font-bold text-green-600 dark:text-green-400">
                 {formatCurrency((delivery.cashCollected || 0) + (delivery.venmoCollected || 0) + (delivery.otherCollected || 0))}
               </span>
             </div>
@@ -1364,6 +1614,95 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
       </div>
     </div>
 
+      {/* Previous Deliveries to this store */}
+      <div className="bg-[#fafafc] dark:bg-[#0a0a0a] rounded-3xl overflow-hidden">
+        <div className="px-8 pt-8 pb-2">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Previous Deliveries</h3>
+          <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">
+            {previousDeliveries.length === 0
+              ? `No prior deliveries to ${delivery.storeName}.`
+              : `${previousDeliveries.length} previous deliver${previousDeliveries.length === 1 ? 'y' : 'ies'} to ${delivery.storeName}.`}
+          </p>
+        </div>
+
+        {previousDeliveries.length > 0 && (
+          <div className="px-4 pb-4">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th className="w-12 text-center">#</th>
+                  <th className="w-28">Date Prepared</th>
+                  <th className="w-28">Dropoff</th>
+                  <th className="w-20 text-center">Prepared</th>
+                  <th className="w-24 text-right">Revenue</th>
+                  <th className="w-20 text-right">COGS</th>
+                  <th className="w-24 text-right">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previousDeliveries.map((d) => (
+                  <tr
+                    key={d.id}
+                    className="group cursor-pointer hover:bg-pink-50 dark:hover:bg-pink-950/30 transition-colors"
+                    onClick={() => router.push(`/deliveries/${d.id}`)}
+                  >
+                    <td>
+                      <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-pink-600 dark:text-pink-400 font-medium text-sm">
+                        {d.id}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-600 dark:text-zinc-400 text-sm whitespace-nowrap">
+                        {formatDate(d.datePrepared)}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center text-gray-600 dark:text-zinc-400 text-sm whitespace-nowrap">
+                        {d.dropoffDate ? formatDate(d.dropoffDate) : <span className="text-gray-300 dark:text-zinc-700">--</span>}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center justify-center text-gray-600 dark:text-zinc-400 text-sm">
+                        {d.totalPrepared}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
+                        {d.totalRevenue > 0 ? (
+                          <span className="text-gray-900 dark:text-zinc-100 font-medium">{formatCurrency(d.totalRevenue)}</span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-zinc-700">--</span>
+                        )}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
+                        {d.totalCogs > 0 ? (
+                          <span className="text-gray-600 dark:text-zinc-400">{formatCurrency(d.totalCogs)}</span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-zinc-700">--</span>
+                        )}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="px-4 py-3 min-h-[44px] flex items-center justify-end text-sm whitespace-nowrap">
+                        {d.grossProfit > 0 ? (
+                          <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(d.grossProfit)}</span>
+                        ) : d.grossProfit < 0 ? (
+                          <span className="text-red-500 dark:text-red-400 font-medium">{formatCurrency(d.grossProfit)}</span>
+                        ) : (
+                          <span className="text-gray-300 dark:text-zinc-700">--</span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Toast */}
       {toast && (
         <div className={`toast ${toast.type}`}>
@@ -1376,11 +1715,11 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => { setShowAddFlavor(false); resetAddFlavorForm(); }} />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Add Flavor to Delivery</h3>
+            <div className="bg-white dark:bg-[#0a0a0a] dark:border dark:border-[#262626] rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-zinc-100 mb-4">Add Flavor to Delivery</h3>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Flavor</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Select Flavor</label>
                 <select
                   value={selectedFlavorId}
                   onChange={(e) => {
@@ -1394,7 +1733,7 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
                       setSelectedRateId('');
                     }
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option value="">Choose a flavor...</option>
                   {availableFlavors.filter(f => f.isActive).map(flavor => (
@@ -1407,11 +1746,11 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 
               {selectedFlavorId && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Rate</label>
                   <select
                     value={selectedRateId}
                     onChange={(e) => setSelectedRateId(e.target.value ? parseInt(e.target.value) : '')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                   >
                     <option value="">Choose a rate...</option>
                     {flavorPrices.filter(p => p.flavorId === selectedFlavorId).map(rate => (
@@ -1424,19 +1763,19 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
               )}
 
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Prepared Qty</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">Prepared Qty</label>
                 <input
                   type="number"
                   value={newItemData.prepared}
                   onChange={(e) => setNewItemData(prev => ({ ...prev, prepared: parseInt(e.target.value) || 0 }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-[#3f3f3f] dark:bg-[#0a0a0a] dark:text-zinc-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 />
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => { setShowAddFlavor(false); resetAddFlavorForm(); }}
-                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-[#1f1f1f] rounded-lg font-medium transition-colors"
                 >
                   Cancel
                 </button>
@@ -1458,10 +1797,10 @@ export default function DeliveryDetail({ deliveryId }: DeliveryDetailProps) {
 // Stat Card Component
 function StatCard({ label, value, sublabel, highlight }: { label: string; value: string; sublabel?: string; highlight?: boolean }) {
   return (
-    <div className={`p-4 rounded-2xl ${highlight ? 'bg-pink-50' : 'bg-gray-50'}`}>
-      <p className="text-xs text-gray-400 uppercase tracking-wide font-medium">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600' : 'text-gray-900'}`}>{value}</p>
-      {sublabel && <p className="text-xs text-gray-400 mt-1">{sublabel}</p>}
+    <div className={`p-4 rounded-2xl ${highlight ? 'bg-pink-50 dark:bg-pink-950/40' : 'bg-gray-50 dark:bg-[#171717]'}`}>
+      <p className="text-xs text-gray-400 dark:text-zinc-500 uppercase tracking-wide font-medium">{label}</p>
+      <p className={`text-2xl font-bold mt-1 ${highlight ? 'text-pink-600 dark:text-pink-400' : 'text-gray-900 dark:text-zinc-100'}`}>{value}</p>
+      {sublabel && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">{sublabel}</p>}
     </div>
   );
 }
@@ -1519,7 +1858,7 @@ function EditableText({ value, onSave, className, allowEmpty = false, multiline 
           onBlur={handleSave}
           onKeyDown={handleKeyDown}
           rows={3}
-          className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2 py-1 w-full resize-none`}
+          className={`${className} bg-white dark:bg-[#0a0a0a] border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2 py-1 w-full resize-none`}
         />
       );
     }
@@ -1532,15 +1871,15 @@ function EditableText({ value, onSave, className, allowEmpty = false, multiline 
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         size={Math.max(editValue.length, 1)}
-        className={`${className} bg-white border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2`}
+        className={`${className} bg-white dark:bg-[#0a0a0a] border-0 focus:ring-2 focus:ring-pink-500 rounded-lg px-2`}
       />
     );
   }
 
   return (
-    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 rounded-lg px-2 -mx-2 whitespace-pre-wrap group/edit flex items-center gap-2`}>
+    <div onClick={() => setIsEditing(true)} className={`${className} cursor-text hover:bg-gray-50 dark:hover:bg-[#171717] rounded-lg px-2 -mx-2 whitespace-pre-wrap group/edit flex items-center gap-2`}>
       {value}
-      <svg className="text-gray-300 group-hover/edit:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg className="text-gray-300 dark:text-zinc-700 group-hover/edit:text-gray-400 dark:group-hover/edit:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
       </svg>
     </div>
@@ -1600,15 +1939,15 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
         onBlur={handleSave}
         onKeyDown={handleKeyDown}
         className={inline
-          ? "w-16 text-right text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
-          : "w-full text-right text-sm bg-white border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
+          ? "w-16 text-right text-sm bg-white dark:bg-[#0a0a0a] dark:text-zinc-100 border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
+          : "w-full text-right text-sm bg-white dark:bg-[#0a0a0a] dark:text-zinc-100 border border-pink-300 focus:ring-2 focus:ring-pink-500 focus:border-pink-500 rounded px-1 py-0.5"
         }
       />
     );
   }
 
   const pencilIcon = (
-    <svg className="text-gray-300 group-hover/num:text-gray-400 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg className="text-gray-300 dark:text-zinc-700 group-hover/num:text-gray-400 dark:group-hover/num:text-zinc-500 shrink-0 transition-colors" style={{ width: '1em', height: '1em' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
     </svg>
   );
@@ -1616,7 +1955,7 @@ function EditableNumber({ value, onSave, isCurrency = false, className, inline =
   return (
     <span
       onClick={() => setIsEditing(true)}
-      className={`${className || "editable-cell text-gray-600 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
+      className={`${className || "editable-cell text-gray-600 dark:text-zinc-400 text-sm text-center justify-center cursor-text"} group/num inline-flex items-center gap-1.5`}
     >
       {showPencil && pencilIcon}
       {formatDisplay(value)}
@@ -1671,7 +2010,7 @@ function NotesEditor({ content, onSave }: { content: string; onSave: (content: s
   if (!QuillComponent) {
     return (
       <div className="notes-editor">
-        <div className="border border-gray-200 rounded-xl bg-white min-h-[160px] p-4 text-gray-400 text-sm">
+        <div className="border border-gray-200 dark:border-[#262626] rounded-xl bg-white dark:bg-[#0a0a0a] min-h-[160px] p-4 text-gray-400 dark:text-zinc-500 text-sm">
           Loading editor...
         </div>
       </div>
@@ -1789,14 +2128,14 @@ function SortableHeader({
 
   return (
     <th
-      className={`${className} cursor-pointer hover:bg-gray-50 transition-colors select-none`}
+      className={`${className} cursor-pointer hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors select-none`}
       onClick={() => onSort(column)}
       style={style}
     >
       <div className={`flex items-center gap-1 ${className.includes('text-right') ? 'justify-end' : className.includes('text-center') ? 'justify-center' : ''}`}>
         <span>{label}</span>
         {isActive && (
-          <span className="text-[10px] text-pink-500">
+          <span className="text-[10px] text-pink-500 dark:text-pink-400">
             {direction === 'asc' ? '▲' : '▼'}
           </span>
         )}

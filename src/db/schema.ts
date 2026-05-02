@@ -47,6 +47,7 @@ export const eventItems = sqliteTable('event_items', {
 export const deliveries = sqliteTable('deliveries', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   storeName: text('store_name').notNull(),
+  location: text('location'),
   datePrepared: text('date_prepared').notNull(),
   dropoffDate: text('dropoff_date'),
   expirationDate: text('expiration_date'),
@@ -87,6 +88,21 @@ export const flavorPrices = sqliteTable('flavor_prices', {
   price: real('price').notNull(),
   cost: real('cost'),
 });
+
+export const auditLog = sqliteTable('audit_log', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  action: text('action').notNull(),
+  entityType: text('entity_type').notNull(),
+  entityId: integer('entity_id').notNull(),
+  entityLabel: text('entity_label'),
+  changedFields: text('changed_fields'),
+  beforeJson: text('before_json'),
+  afterJson: text('after_json'),
+  createdAt: text('created_at').default('CURRENT_TIMESTAMP'),
+});
+
+export type AuditLog = typeof auditLog.$inferSelect;
+export type NewAuditLog = typeof auditLog.$inferInsert;
 
 export type Flavor = typeof flavors.$inferSelect;
 export type NewFlavor = typeof flavors.$inferInsert;
