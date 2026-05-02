@@ -352,195 +352,8 @@ export default function DeliveriesTable(): React.ReactElement {
         <div className="flex items-start justify-between gap-4 flex-wrap px-8 pt-8 pb-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Deliveries</h2>
-            <p className="text-base text-gray-700 dark:text-zinc-300 mt-1">
-              {numActiveFilters > 0
-                ? `Showing ${filteredDeliveries.length} of ${deliveries.length} deliveries.`
-                : 'Select a store below to view details, or add a new store to get started.'}
-            </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {deliveries.length > 0 && (
-              <>
-                {/* View toggle: List / By Store */}
-                <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-full p-0.5 border border-gray-200 dark:border-[#262626]">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-all flex items-center gap-1.5 ${
-                      viewMode === 'list'
-                        ? 'bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-zinc-100 shadow-sm'
-                        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    By Date
-                  </button>
-                  <button
-                    onClick={() => setViewMode('byStore')}
-                    className={`px-3 py-1 text-xs font-medium rounded-full transition-all flex items-center gap-1.5 ${
-                      viewMode === 'byStore'
-                        ? 'bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-zinc-100 shadow-sm'
-                        : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l2-5h14l2 5M3 9v10a1 1 0 001 1h16a1 1 0 001-1V9M3 9h18M9 14h6" />
-                    </svg>
-                    By Store
-                  </button>
-                </div>
-
-                <span className="w-px h-6 bg-gray-200 dark:bg-[#262626] mx-1" />
-
-                {/* Store filter */}
-                <FilterPill
-                  label="Store"
-                  active={selectedStores.length > 0}
-                  activeText={selectedStores.length === 1 ? selectedStores[0] : selectedStores.length > 1 ? `${selectedStores.length} stores` : null}
-                  isOpen={openFilter === 'store'}
-                  onToggle={() => setOpenFilter(openFilter === 'store' ? null : 'store')}
-                  onClear={() => { setSelectedStores([]); setStoreSearch(''); }}
-                  popoverWidth="w-72"
-                >
-                  <div className="p-3">
-                    <input
-                      type="text"
-                      placeholder="Search stores..."
-                      value={storeSearch}
-                      onChange={(e) => setStoreSearch(e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-[#171717] border border-gray-200 dark:border-[#262626] rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
-                    />
-                    <div className="flex items-center justify-between mt-2 mb-1 px-1">
-                      <button
-                        onClick={() => setSelectedStores(filteredStoreOptions)}
-                        className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
-                      >
-                        Select all
-                      </button>
-                      <button
-                        onClick={() => setSelectedStores([])}
-                        className="text-xs font-medium text-gray-500 dark:text-zinc-400 hover:underline"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto">
-                      {filteredStoreOptions.length === 0 ? (
-                        <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-4">No stores match</p>
-                      ) : (
-                        filteredStoreOptions.map(store => (
-                          <label
-                            key={store}
-                            className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-[#171717] cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedStores.includes(store)}
-                              onChange={(e) => {
-                                if (e.target.checked) setSelectedStores(prev => [...prev, store]);
-                                else setSelectedStores(prev => prev.filter(s => s !== store));
-                              }}
-                              className="w-4 h-4 accent-pink-500"
-                            />
-                            <span className="text-sm text-gray-700 dark:text-zinc-300 truncate">{store}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </FilterPill>
-
-                {/* Date filter */}
-                <FilterPill
-                  label="Date"
-                  active={!!(dateRange?.from || dateRange?.to)}
-                  activeText={
-                    dateRange?.from && dateRange?.to
-                      ? `${dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${dateRange.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                      : dateRange?.from
-                      ? `From ${dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                      : dateRange?.to
-                      ? `Until ${dateRange.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-                      : null
-                  }
-                  isOpen={openFilter === 'date'}
-                  onToggle={() => setOpenFilter(openFilter === 'date' ? null : 'date')}
-                  onClear={() => { setDateRange(undefined); setActiveDatePreset(null); }}
-                  popoverWidth="w-auto"
-                >
-                  <div className="p-4">
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {([
-                        ['last7', 'Last 7 days'],
-                        ['last30', 'Last 30 days'],
-                        ['thisMonth', 'This month'],
-                        ['lastMonth', 'Last month'],
-                        ['thisYear', 'This year'],
-                        ['all', 'All time'],
-                      ] as const).map(([key, label]) => {
-                        const isActive = key !== 'all' && activeDatePreset === key;
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => applyDatePreset(key)}
-                            className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
-                              isActive
-                                ? 'bg-pink-500 dark:bg-pink-500 text-white border-pink-500 hover:bg-pink-600'
-                                : 'bg-gray-50 dark:bg-[#171717] text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-[#262626] hover:bg-pink-50 dark:hover:bg-pink-950/30 hover:text-pink-600 dark:hover:text-pink-400'
-                            }`}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <DayPicker
-                      mode="range"
-                      selected={dateRange}
-                      onSelect={(r) => { setDateRange(r); setActiveDatePreset(null); }}
-                      numberOfMonths={2}
-                      className="!font-sans"
-                    />
-                  </div>
-                </FilterPill>
-
-                {/* Numeric ranges filter */}
-                <FilterPill
-                  label="Amounts"
-                  active={!!(revenueMin || revenueMax || profitMin || profitMax || preparedMin || preparedMax)}
-                  activeText={
-                    [
-                      (revenueMin || revenueMax) && 'Revenue',
-                      (profitMin || profitMax) && 'Profit',
-                      (preparedMin || preparedMax) && 'Prepared',
-                    ].filter(Boolean).join(', ') || null
-                  }
-                  isOpen={openFilter === 'advanced'}
-                  onToggle={() => setOpenFilter(openFilter === 'advanced' ? null : 'advanced')}
-                  onClear={() => { setRevenueMin(''); setRevenueMax(''); setProfitMin(''); setProfitMax(''); setPreparedMin(''); setPreparedMax(''); }}
-                  popoverWidth="w-96"
-                >
-                  <div className="p-5 space-y-4">
-                    <RangeRow label="Revenue" prefix="$" min={revenueMin} max={revenueMax} onMin={setRevenueMin} onMax={setRevenueMax} />
-                    <RangeRow label="Profit" prefix="$" min={profitMin} max={profitMax} onMin={setProfitMin} onMax={setProfitMax} />
-                    <RangeRow label="Prepared" prefix="" min={preparedMin} max={preparedMax} onMin={setPreparedMin} onMax={setPreparedMax} />
-                  </div>
-                </FilterPill>
-
-                {numActiveFilters > 0 && (
-                  <button
-                    onClick={clearAllFilters}
-                    className="text-xs font-medium text-gray-500 dark:text-zinc-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors px-2"
-                  >
-                    Clear all
-                  </button>
-                )}
-
-                <span className="w-px h-6 bg-gray-200 dark:bg-[#262626] mx-1" />
-              </>
-            )}
-
             {deliveriesWithLocations.length > 0 && (
               <button
                 onClick={() => setShowMap(true)}
@@ -607,6 +420,195 @@ export default function DeliveriesTable(): React.ReactElement {
           </div>
         )}
 
+        {/* Helper text + filter controls */}
+        <div className="flex items-start justify-between gap-4 flex-wrap px-8 pb-4">
+          <p className="text-base text-gray-700 dark:text-zinc-300">
+            {numActiveFilters > 0
+              ? `Showing ${filteredDeliveries.length} of ${deliveries.length} deliveries.`
+              : 'Select a store below to view details, or add a new store to get started.'}
+          </p>
+
+          {deliveries.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* View toggle: By Date / By Store */}
+              <div className="flex bg-gray-100 dark:bg-[#1f1f1f] rounded-full p-0.5 border border-gray-200 dark:border-[#262626]">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-all flex items-center gap-1.5 ${
+                    viewMode === 'list'
+                      ? 'bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  By Date
+                </button>
+                <button
+                  onClick={() => setViewMode('byStore')}
+                  className={`px-3 py-1 text-xs font-medium rounded-full transition-all flex items-center gap-1.5 ${
+                    viewMode === 'byStore'
+                      ? 'bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9l2-5h14l2 5M3 9v10a1 1 0 001 1h16a1 1 0 001-1V9M3 9h18M9 14h6" />
+                  </svg>
+                  By Store
+                </button>
+              </div>
+
+              <span className="w-px h-6 bg-gray-200 dark:bg-[#262626] mx-1" />
+
+              {/* Store filter */}
+              <FilterPill
+                label="Store"
+                active={selectedStores.length > 0}
+                activeText={selectedStores.length === 1 ? selectedStores[0] : selectedStores.length > 1 ? `${selectedStores.length} stores` : null}
+                isOpen={openFilter === 'store'}
+                onToggle={() => setOpenFilter(openFilter === 'store' ? null : 'store')}
+                onClear={() => { setSelectedStores([]); setStoreSearch(''); }}
+                popoverWidth="w-72"
+              >
+                <div className="p-3">
+                  <input
+                    type="text"
+                    placeholder="Search stores..."
+                    value={storeSearch}
+                    onChange={(e) => setStoreSearch(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-gray-50 dark:bg-[#171717] border border-gray-200 dark:border-[#262626] rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 text-gray-900 dark:text-zinc-100 placeholder:text-gray-400 dark:placeholder:text-zinc-600"
+                  />
+                  <div className="flex items-center justify-between mt-2 mb-1 px-1">
+                    <button
+                      onClick={() => setSelectedStores(filteredStoreOptions)}
+                      className="text-xs font-medium text-pink-600 dark:text-pink-400 hover:underline"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      onClick={() => setSelectedStores([])}
+                      className="text-xs font-medium text-gray-500 dark:text-zinc-400 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {filteredStoreOptions.length === 0 ? (
+                      <p className="text-sm text-gray-400 dark:text-zinc-500 text-center py-4">No stores match</p>
+                    ) : (
+                      filteredStoreOptions.map(store => (
+                        <label
+                          key={store}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-[#171717] cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedStores.includes(store)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedStores(prev => [...prev, store]);
+                              else setSelectedStores(prev => prev.filter(s => s !== store));
+                            }}
+                            className="w-4 h-4 accent-pink-500"
+                          />
+                          <span className="text-sm text-gray-700 dark:text-zinc-300 truncate">{store}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </FilterPill>
+
+              {/* Date filter */}
+              <FilterPill
+                label="Date"
+                active={!!(dateRange?.from || dateRange?.to)}
+                activeText={
+                  dateRange?.from && dateRange?.to
+                    ? `${dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${dateRange.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    : dateRange?.from
+                    ? `From ${dateRange.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    : dateRange?.to
+                    ? `Until ${dateRange.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                    : null
+                }
+                isOpen={openFilter === 'date'}
+                onToggle={() => setOpenFilter(openFilter === 'date' ? null : 'date')}
+                onClear={() => { setDateRange(undefined); setActiveDatePreset(null); }}
+                popoverWidth="w-auto"
+              >
+                <div className="p-4">
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {([
+                      ['last7', 'Last 7 days'],
+                      ['last30', 'Last 30 days'],
+                      ['thisMonth', 'This month'],
+                      ['lastMonth', 'Last month'],
+                      ['thisYear', 'This year'],
+                      ['all', 'All time'],
+                    ] as const).map(([key, label]) => {
+                      const isActive = key !== 'all' && activeDatePreset === key;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => applyDatePreset(key)}
+                          className={`px-3 py-1 text-xs font-medium rounded-full border transition-colors ${
+                            isActive
+                              ? 'bg-pink-500 dark:bg-pink-500 text-white border-pink-500 hover:bg-pink-600'
+                              : 'bg-gray-50 dark:bg-[#171717] text-gray-700 dark:text-zinc-300 border-gray-200 dark:border-[#262626] hover:bg-pink-50 dark:hover:bg-pink-950/30 hover:text-pink-600 dark:hover:text-pink-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <DayPicker
+                    mode="range"
+                    selected={dateRange}
+                    onSelect={(r) => { setDateRange(r); setActiveDatePreset(null); }}
+                    numberOfMonths={2}
+                    className="!font-sans"
+                  />
+                </div>
+              </FilterPill>
+
+              {/* Numeric ranges filter */}
+              <FilterPill
+                label="Amounts"
+                active={!!(revenueMin || revenueMax || profitMin || profitMax || preparedMin || preparedMax)}
+                activeText={
+                  [
+                    (revenueMin || revenueMax) && 'Revenue',
+                    (profitMin || profitMax) && 'Profit',
+                    (preparedMin || preparedMax) && 'Prepared',
+                  ].filter(Boolean).join(', ') || null
+                }
+                isOpen={openFilter === 'advanced'}
+                onToggle={() => setOpenFilter(openFilter === 'advanced' ? null : 'advanced')}
+                onClear={() => { setRevenueMin(''); setRevenueMax(''); setProfitMin(''); setProfitMax(''); setPreparedMin(''); setPreparedMax(''); }}
+                popoverWidth="w-96"
+              >
+                <div className="p-5 space-y-4">
+                  <RangeRow label="Revenue" prefix="$" min={revenueMin} max={revenueMax} onMin={setRevenueMin} onMax={setRevenueMax} />
+                  <RangeRow label="Profit" prefix="$" min={profitMin} max={profitMax} onMin={setProfitMin} onMax={setProfitMax} />
+                  <RangeRow label="Prepared" prefix="" min={preparedMin} max={preparedMax} onMin={setPreparedMin} onMax={setPreparedMax} />
+                </div>
+              </FilterPill>
+
+              {numActiveFilters > 0 && (
+                <button
+                  onClick={clearAllFilters}
+                  className="text-xs font-medium text-gray-500 dark:text-zinc-400 hover:text-pink-600 dark:hover:text-pink-400 transition-colors px-2"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Table */}
         <div className="px-4 pb-4">
           <table className="data-table">
@@ -631,7 +633,7 @@ export default function DeliveriesTable(): React.ReactElement {
                   onClick={() => router.push(`/deliveries/${delivery.id}`)}
                 >
                   <td>
-                    <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-400 dark:text-zinc-500 text-sm">
+                    <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-900 dark:text-zinc-100 font-medium text-sm">
                       {delivery.id}
                     </span>
                   </td>
@@ -745,7 +747,7 @@ export default function DeliveriesTable(): React.ReactElement {
                       onClick={() => router.push(`/deliveries/${delivery.id}`)}
                     >
                       <td>
-                        <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-400 dark:text-zinc-500 text-sm">{delivery.id}</span>
+                        <span className="px-2 py-3 min-h-[44px] flex items-center justify-center text-gray-900 dark:text-zinc-100 font-medium text-sm">{delivery.id}</span>
                       </td>
                       <td>
                         <div className="flex items-center gap-2 pl-6 px-4 py-3 min-h-[44px]">

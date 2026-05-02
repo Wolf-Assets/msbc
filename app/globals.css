@@ -116,10 +116,14 @@ html.font-geist-tight {
     border-spacing: 0;
   }
 
+  .data-table th,
+  .data-table th * {
+    font-family: 'Geist', system-ui, sans-serif;
+  }
+
   .data-table th {
     text-align: left;
     padding: 16px 16px;
-    font-family: 'Geist', system-ui, sans-serif;
     font-weight: 500;
     font-size: 12px;
     text-transform: uppercase;
