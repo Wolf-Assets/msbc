@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { DayPicker, type DateRange } from 'react-day-picker';
 import 'react-day-picker/style.css';
 import AddStoreModal from './AddStoreModal';
+import DeliveriesMapModal from './DeliveriesMapModal';
 
 interface Delivery {
   id: number;
   storeName: string;
+  location: string | null;
   datePrepared: string;
   dropoffDate: string | null;
   expirationDate: string | null;
@@ -80,6 +82,13 @@ export default function DeliveriesTable(): React.ReactElement {
     try { localStorage.setItem('deliveriesViewMode', mode); } catch {}
   };
   const [showAddStore, setShowAddStore] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedMapDelivery, setSelectedMapDelivery] = useState<Delivery | null>(null);
+
+  const deliveriesWithLocations = useMemo(
+    () => deliveries.filter(d => d.location && d.location.trim() !== ''),
+    [deliveries]
+  );
 
   const normalizeStore = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
 
@@ -532,6 +541,18 @@ export default function DeliveriesTable(): React.ReactElement {
               </>
             )}
 
+            {deliveriesWithLocations.length > 0 && (
+              <button
+                onClick={() => setShowMap(true)}
+                className="px-5 py-2.5 bg-white dark:bg-[#0a0a0a] border border-gray-200 dark:border-[#262626] text-gray-700 dark:text-zinc-300 rounded-full font-medium text-sm hover:bg-gray-50 dark:hover:bg-[#171717] transition-all hover:shadow-md flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Past Deliveries
+              </button>
+            )}
             <button
               onClick={toggleArchived}
               className={`px-5 py-2.5 border rounded-full font-medium text-sm transition-all hover:shadow-md flex items-center gap-2 ${
@@ -868,6 +889,17 @@ export default function DeliveriesTable(): React.ReactElement {
         deliveries={deliveries}
         onCreated={handleAddStoreCreated}
       />
+
+      {showMap && (
+        <DeliveriesMapModal
+          deliveries={deliveriesWithLocations}
+          onClose={() => { setShowMap(false); setSelectedMapDelivery(null); }}
+          selectedDelivery={selectedMapDelivery}
+          onSelectDelivery={setSelectedMapDelivery}
+          formatCurrency={formatCurrency}
+          formatDate={formatDate}
+        />
+      )}
     </div>
   );
 }
